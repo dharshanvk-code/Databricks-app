@@ -1,0 +1,6 @@
+entity_id,company,canonical_address,country,match_score,status,street_similarity,company_similarity,city_match,postal_match,country_match
+E001,ABC Corp,"123 Main St, New York, NY 10001",US,0.97,Matched,0.98,0.95,1,1,1
+E002,XYZ Logistics,"45 Market St, San Francisco, CA 94105",US,0.84,Review,0.87,0.81,1,1,1
+E003,Global Tech Ltd,"10 King St, London SW1A 1AA",GB,0.99,Matched,0.99,0.98,1,1,1
+E004,Sakura Foods,"2-10-4 Shibuya, Tokyo",JP,0.91,Matched,0.93,0.88,1,0,1
+E005,Northstar Systems,"200 Queen St, Toronto, ON",CA,0.72,Review,0.76,0.70,1,0,1
