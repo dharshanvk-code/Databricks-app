@@ -1,6 +1,9 @@
-entity_id,company,canonical_address,country,match_score,status,street_similarity,company_similarity,city_match,postal_match,country_match
-E001,ABC Corp,"123 Main St, New York, NY 10001",US,0.97,Matched,0.98,0.95,1,1,1
-E002,XYZ Logistics,"45 Market St, San Francisco, CA 94105",US,0.84,Review,0.87,0.81,1,1,1
-E003,Global Tech Ltd,"10 King St, London SW1A 1AA",GB,0.99,Matched,0.99,0.98,1,1,1
-E004,Sakura Foods,"2-10-4 Shibuya, Tokyo",JP,0.91,Matched,0.93,0.88,1,0,1
-E005,Northstar Systems,"200 Queen St, Toronto, ON",CA,0.72,Review,0.76,0.70,1,0,1
+entity_id,company,canonical_address,country,match_score,status,provider_a_id,provider_a_company,provider_a_address,provider_a_country,provider_b_id,provider_b_company,provider_b_address,provider_b_country,street_similarity,company_similarity,city_match,postal_match,country_match
+E001,ABC Corp,"123 Main St, New York, NY 10001",US,0.97,Matched,A101,ABC Corporation,"123 Main Street, New York, NY 10001",US,B501,ABC Corp,"123 Main St., New York, NY 10001",US,0.98,0.95,1,1,1
+E002,XYZ Logistics,"45 Market St, San Francisco, CA 94105",US,0.84,Review,A102,XYZ Logistics LLC,"45 Market Street, San Francisco, CA 94105",US,B502,XYZ Logistic,"45 Market St, San Francisco, CA",US,0.91,0.86,1,0,1
+E003,Global Tech Ltd,"10 King St, London SW1A 1AA",GB,0.99,Matched,A103,Global Technologies Ltd,"10 King Street, London SW1A 1AA",GB,B503,Global Tech Ltd,"10 King St., London SW1A 1AA",GB,0.99,0.98,1,1,1
+E004,Sakura Foods,"2-10-4 Shibuya, Tokyo",JP,0.91,Matched,A104,株式会社さくら食品,"東京都渋谷区2-10-4",JP,B504,Sakura Foods,"2-10-4 Shibuya, Tokyo",JP,0.93,0.89,1,1,1
+E005,Northstar Systems,"200 Queen St, Toronto, ON",CA,0.72,Review,A105,Northstar Systems,"200 Queen Street, Toronto, Ontario",CA,B505,North Star Systems,"200 Queen St, Toronto",CA,0.88,0.81,1,0,1
+E006,Pacific Manufacturing,"900 Industrial Ave, Seattle, WA 98101",US,0.33,Review,A106,Pacific Manufacturing,"900 Industrial Ave, Seattle, WA 98101",US,B506,Pacific Manufacturing,"900 Industrial Ave, Vancouver, BC V5K 0A1",CA,0.95,0.99,0,0,0
+E007,Delta Imports,"77 Commerce Rd, Miami, FL 33101",US,0.96,Matched,A107,Delta Imports Inc,"77 Commerce Road, Miami, FL 33101",US,B507,Delta Imports,"77 Commerce Rd., Miami, FL 33101",US,0.97,0.94,1,1,1
+E008,Helios Energy,"14 Alexanderplatz, Berlin",DE,0.79,Review,A108,Helios Energie GmbH,"Alexanderplatz 14, Berlin",DE,B508,Helios Energy,"14 Alexander Platz, Berlin",DE,0.89,0.76,1,1,1
