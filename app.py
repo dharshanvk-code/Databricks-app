@@ -45,7 +45,6 @@ st.dataframe(
             "status"
         ]
     ],
-    width="stretch",
     hide_index=True
 )
 
@@ -105,5 +104,6 @@ if entity_options:
             f"Country match: "
             f"{'Yes' if row['country_match'] else 'No'}"
         )
+
 else:
     st.warning("No entities match the selected filters.")
