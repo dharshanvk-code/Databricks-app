@@ -1,26 +1,246 @@
+import os
 import pandas as pd
 import streamlit as st
+
+from databricks.sdk import WorkspaceClient
+
 
 st.set_page_config(
     page_title="Altana Entity Resolution",
     layout="wide"
 )
 
+
+# -------------------------------------------------
+# DATABRICKS CONNECTION
+# -------------------------------------------------
+
+warehouse_id = os.getenv(
+    "SQL_WAREHOUSE_ID",
+    "64b2e31b1ee2c8a6"
+)
+
+workspace = WorkspaceClient()
+
+
+def query_databricks(sql: str) -> pd.DataFrame:
+    response = workspace.statement_execution.execute_statement(
+        warehouse_id=warehouse_id,
+        statement=sql,
+        wait_timeout="30s"
+    )
+
+    if response.status and response.status.state:
+        state = str(response.status.state)
+
+        if "FAILED" in state or "CANCELED" in state:
+            error_message = (
+                response.status.error.message
+                if response.status.error
+                else f"Query failed with state: {state}"
+            )
+
+            raise RuntimeError(error_message)
+
+    if not response.result or not response.result.data_array:
+        return pd.DataFrame()
+
+    columns = [
+        column.name
+        for column in response.manifest.schema.columns
+    ]
+
+    return pd.DataFrame(
+        response.result.data_array,
+        columns=columns
+    )
+
+
+# -------------------------------------------------
+# DATA HELPERS
+# -------------------------------------------------
+
+def convert_numeric_columns(df: pd.DataFrame, columns):
+    for column in columns:
+        if column in df.columns:
+            df[column] = pd.to_numeric(
+                df[column],
+                errors="coerce"
+            )
+
+    return df
+
+
+def convert_boolean_columns(df: pd.DataFrame, columns):
+    for column in columns:
+        if column in df.columns:
+            df[column] = df[column].map(
+                lambda value: (
+                    str(value).lower() == "true"
+                    if pd.notna(value)
+                    else None
+                )
+            )
+
+    return df
+
+
+# -------------------------------------------------
+# LOAD ENTITY LIST
+# -------------------------------------------------
+
+@st.cache_data(ttl=60)
+def load_entities():
+    sql = """
+    SELECT
+        entity_id,
+        company,
+        canonical_address,
+        country,
+        match_score,
+        status,
+        provider_a_id,
+        provider_b_id,
+        provider_a_company,
+        provider_b_company,
+        provider_a_address,
+        provider_b_address,
+        provider_a_country,
+        provider_b_country,
+        street_similarity,
+        company_similarity,
+        city_match,
+        postal_match,
+        country_match
+    FROM addressresolution.gold.entity_matches
+    ORDER BY match_score DESC
+    """
+
+    df = query_databricks(sql)
+
+    df = convert_numeric_columns(
+        df,
+        [
+            "match_score",
+            "street_similarity",
+            "company_similarity"
+        ]
+    )
+
+    df = convert_boolean_columns(
+        df,
+        [
+            "city_match",
+            "postal_match",
+            "country_match"
+        ]
+    )
+
+    return df
+
+
+# -------------------------------------------------
+# LOAD ENTITY DETAILS
+# -------------------------------------------------
+
+@st.cache_data(ttl=60)
+def load_entity_details(entity_id: str):
+    safe_entity_id = entity_id.replace("'", "''")
+
+    sql = f"""
+    SELECT
+        entity_id,
+        company,
+        canonical_address,
+        country,
+        match_score,
+        status,
+        provider_a_id,
+        provider_b_id,
+        provider_a_company,
+        provider_b_company,
+        provider_a_address,
+        provider_b_address,
+        provider_a_country,
+        provider_b_country,
+        street_similarity,
+        company_similarity,
+        city_match,
+        postal_match,
+        country_match,
+        match_rank,
+        provider_a_record_id,
+        provider_b_record_id,
+        company_levenshtein_similarity,
+        street_jaro_winkler_similarity,
+        city_jaro_winkler_similarity,
+        match_weight,
+        resolution_run_id,
+        resolved_at
+    FROM addressresolution.gold.entity_match_details
+    WHERE entity_id = '{safe_entity_id}'
+    ORDER BY match_rank
+    """
+
+    df = query_databricks(sql)
+
+    df = convert_numeric_columns(
+        df,
+        [
+            "match_score",
+            "street_similarity",
+            "company_similarity",
+            "company_levenshtein_similarity",
+            "street_jaro_winkler_similarity",
+            "city_jaro_winkler_similarity",
+            "match_weight",
+            "match_rank"
+        ]
+    )
+
+    df = convert_boolean_columns(
+        df,
+        [
+            "city_match",
+            "postal_match",
+            "country_match"
+        ]
+    )
+
+    return df
+
+
 # -------------------------------------------------
 # LOAD DATA
 # -------------------------------------------------
 
-df = pd.read_csv("mock_gold.csv")
+try:
+    df = load_entities()
+
+except Exception as error:
+    st.error("Unable to load Gold entity data.")
+    st.exception(error)
+
+    st.info(
+        "If you are running locally, Databricks authentication "
+        "must also be configured on your machine. "
+        "The deployed Databricks App authenticates automatically."
+    )
+
+    st.stop()
+
 
 # -------------------------------------------------
 # HEADER
 # -------------------------------------------------
 
 st.title("Altana Entity Resolution")
+
 st.caption(
-    "Explore resolved entities, review uncertain matches, "
+    "Explore resolved entities, review matches, "
     "and understand why records were deduplicated."
 )
+
 
 # -------------------------------------------------
 # SIDEBAR
@@ -31,27 +251,27 @@ with st.sidebar:
 
     question = st.text_input(
         "Ask about the data",
-        placeholder="Why was E001 matched?"
+        placeholder="Why was this entity matched?"
     )
 
     if question:
         q = question.lower()
 
-        if "review" in q:
-            review_count = len(df[df["status"] == "Review"])
-            st.success(f"There are {review_count} entities currently in review.")
-
-        elif "matched" in q and "how many" in q:
-            matched_count = len(df[df["status"] == "Matched"])
-            st.success(f"There are {matched_count} matched entities.")
+        if "matched" in q and "how many" in q:
+            st.success(
+                f"There are {len(df):,} resolved entities."
+            )
 
         elif "under 85" in q or "below 85" in q:
-            low_confidence = df[df["match_score"] < 0.85]
+            low_confidence = df[
+                df["match_score"] < 0.85
+            ]
 
             if low_confidence.empty:
-                st.info("There are no entities below 85% confidence.")
+                st.info(
+                    "There are no matches below 85%."
+                )
             else:
-                st.write("Entities below 85% confidence:")
                 st.dataframe(
                     low_confidence[
                         [
@@ -64,108 +284,121 @@ with st.sidebar:
                     hide_index=True
                 )
 
-        elif "why" in q:
-            entity_found = None
-
-            for entity_id in df["entity_id"]:
-                if entity_id.lower() in q:
-                    entity_found = entity_id
-                    break
-
-            if entity_found:
-                row = df[df["entity_id"] == entity_found].iloc[0]
-
-                st.write(f"### {entity_found}")
-                st.write(
-                    f"Match score: "
-                    f"{row['match_score'] * 100:.0f}%"
-                )
-                st.write(
-                    f"Street similarity: "
-                    f"{row['street_similarity'] * 100:.0f}%"
-                )
-                st.write(
-                    f"Company similarity: "
-                    f"{row['company_similarity'] * 100:.0f}%"
-                )
-                st.write(
-                    f"Country match: "
-                    f"{'Yes' if row['country_match'] else 'No'}"
-                )
-            else:
-                st.info(
-                    "Include an entity ID, for example: "
-                    "'Why was E001 matched?'"
-                )
-
         else:
             st.info(
                 "Try asking:\n\n"
-                "- Why was E001 matched?\n"
                 "- How many are matched?\n"
-                "- How many are in review?\n"
                 "- Show matches under 85%"
             )
 
     st.divider()
 
+    status_options = sorted(
+        df["status"]
+        .dropna()
+        .unique()
+        .tolist()
+    )
+
     status_filter = st.multiselect(
         "Status",
-        options=df["status"].unique(),
-        default=df["status"].unique()
+        options=status_options,
+        default=status_options
+    )
+
+    country_options = sorted(
+        df["country"]
+        .dropna()
+        .unique()
+        .tolist()
     )
 
     country_filter = st.multiselect(
         "Country",
-        options=sorted(df["country"].dropna().unique()),
-        default=[]
+        options=country_options
     )
+
 
 # -------------------------------------------------
 # FILTER DATA
 # -------------------------------------------------
 
-filtered_df = df[df["status"].isin(status_filter)].copy()
+filtered_df = df[
+    df["status"].isin(status_filter)
+].copy()
 
 if country_filter:
     filtered_df = filtered_df[
-        filtered_df["country"].isin(country_filter)
+        filtered_df["country"].isin(
+            country_filter
+        )
     ]
+
 
 # -------------------------------------------------
 # SUMMARY METRICS
 # -------------------------------------------------
 
-metric1, metric2, metric3, metric4 = st.columns(4)
+metric_1, metric_2, metric_3, metric_4 = st.columns(4)
 
-with metric1:
-    st.metric("Entities", len(filtered_df))
-
-with metric2:
-    matched_count = len(
-        filtered_df[filtered_df["status"] == "Matched"]
+with metric_1:
+    st.metric(
+        "Entities",
+        f"{len(filtered_df):,}"
     )
-    st.metric("Matched", matched_count)
 
-with metric3:
-    review_count = len(
-        filtered_df[filtered_df["status"] == "Review"]
+with metric_2:
+    exact_matches = len(
+        filtered_df[
+            filtered_df["status"] == "exact_baseline"
+        ]
     )
-    st.metric("Review", review_count)
 
-with metric4:
+    st.metric(
+        "Exact Matches",
+        f"{exact_matches:,}"
+    )
+
+with metric_3:
+    proposed_matches = len(
+        filtered_df[
+            filtered_df["status"] == "proposed_match"
+        ]
+    )
+
+    st.metric(
+        "Proposed Matches",
+        f"{proposed_matches:,}"
+    )
+
+with metric_4:
     if len(filtered_df) > 0:
-        avg_score = filtered_df["match_score"].mean() * 100
-        st.metric("Avg. Match Score", f"{avg_score:.1f}%")
+        average_score = (
+            filtered_df["match_score"].mean()
+            * 100
+        )
+
+        st.metric(
+            "Avg. Match Score",
+            f"{average_score:.1f}%"
+        )
     else:
-        st.metric("Avg. Match Score", "—")
+        st.metric(
+            "Avg. Match Score",
+            "—"
+        )
+
 
 # -------------------------------------------------
 # ENTITY TABLE
 # -------------------------------------------------
 
 st.subheader("Resolved Entities")
-st.caption("Select a row to inspect the deduplication decision.")
+
+st.caption(
+    "Select a row to inspect all matched records "
+    "for that entity."
+)
 
 display_df = filtered_df[
     [
@@ -179,7 +412,8 @@ display_df = filtered_df[
 ].copy()
 
 display_df["match_score"] = (
-    display_df["match_score"] * 100
+    display_df["match_score"]
+    * 100
 ).round(1)
 
 display_df = display_df.rename(
@@ -193,220 +427,342 @@ display_df = display_df.rename(
     }
 )
 
-if not display_df.empty:
+if display_df.empty:
+    st.warning(
+        "No entities match the selected filters."
+    )
+    st.stop()
 
-    event = st.dataframe(
-        display_df,
-        hide_index=True,
-        on_select="rerun",
-        selection_mode="single-row",
-        key="entity_table"
+
+event = st.dataframe(
+    display_df,
+    hide_index=True,
+    on_select="rerun",
+    selection_mode="single-row",
+    key="entity_table"
+)
+
+selected_rows = event.selection.rows
+
+if selected_rows:
+    selected_index = selected_rows[0]
+else:
+    selected_index = 0
+
+selected_entity = filtered_df.iloc[
+    selected_index
+]["entity_id"]
+
+
+# -------------------------------------------------
+# DETAIL QUERY
+# -------------------------------------------------
+
+try:
+    detail_df = load_entity_details(
+        selected_entity
     )
 
-    selected_rows = event.selection.rows
+except Exception as error:
+    st.error(
+        "Unable to load entity match details."
+    )
 
-    if selected_rows:
-        selected_index = selected_rows[0]
-    else:
-        selected_index = 0
+    st.exception(error)
+    st.stop()
 
-    selected_row = filtered_df.iloc[selected_index]
 
-else:
-    selected_row = None
-    st.warning("No entities match the selected filters.")
+if detail_df.empty:
+    st.warning(
+        "No match details found for this entity."
+    )
+    st.stop()
+
+
+best_match = detail_df.iloc[0]
+
 
 # -------------------------------------------------
 # MATCH EXPLANATION
 # -------------------------------------------------
 
-if selected_row is not None:
+st.divider()
 
-    st.divider()
+st.subheader(
+    f"Entity {selected_entity} — Match Explanation"
+)
 
-    st.subheader(
-        f"Entity {selected_row['entity_id']} — Match Explanation"
+score_col, decision_col, company_col = st.columns(3)
+
+with score_col:
+    st.metric(
+        "Overall Match Score",
+        f"{best_match['match_score'] * 100:.0f}%"
     )
 
-    score = selected_row["match_score"]
+with decision_col:
+    decision = best_match["status"]
 
-    if selected_row["status"] == "Matched":
-        decision_text = "Duplicate / Existing Entity"
-    elif selected_row["status"] == "Review":
-        decision_text = "Needs Review"
+    if decision == "exact_baseline":
+        decision_display = "Exact Match"
+
+    elif decision == "proposed_match":
+        decision_display = "Duplicate"
+
     else:
-        decision_text = selected_row["status"]
+        decision_display = str(decision)
 
-    score_col, decision_col, company_col = st.columns(3)
+    st.metric(
+        "Decision",
+        decision_display
+    )
 
-    with score_col:
-        st.metric(
-            "Overall Match Score",
-            f"{score * 100:.0f}%"
+with company_col:
+    st.metric(
+        "Canonical Company",
+        best_match["company"]
+    )
+
+
+# -------------------------------------------------
+# MULTIPLE MATCHES
+# -------------------------------------------------
+
+if len(detail_df) > 1:
+    st.info(
+        f"This entity has {len(detail_df)} "
+        "matched Provider A ↔ Provider B pairs."
+    )
+
+    match_options = []
+
+    for _, row in detail_df.iterrows():
+        match_options.append(
+            f"Match {int(row['match_rank'])}: "
+            f"A-{row['provider_a_id']} ↔ "
+            f"B-{row['provider_b_id']} "
+            f"({row['match_score'] * 100:.1f}%)"
         )
 
-    with decision_col:
-        st.metric(
-            "Decision",
-            decision_text
-        )
+    selected_match_label = st.selectbox(
+        "Matched pair",
+        match_options
+    )
 
-    with company_col:
-        st.metric(
-            "Canonical Company",
-            selected_row["company"]
-        )
+    selected_match_index = match_options.index(
+        selected_match_label
+    )
 
-    # ---------------------------------------------
-    # PROVIDER COMPARISON
-    # ---------------------------------------------
+    selected_match = detail_df.iloc[
+        selected_match_index
+    ]
 
-    st.write("### Source Records")
+else:
+    selected_match = detail_df.iloc[0]
 
-    provider_a_col, provider_b_col = st.columns(2)
 
-    with provider_a_col:
-        st.write("#### Provider A")
+# -------------------------------------------------
+# SOURCE RECORDS
+# -------------------------------------------------
 
-        st.write(
-            f"**Record ID:** "
-            f"{selected_row['provider_a_id']}"
-        )
+st.write("### Source Records")
 
-        st.write(
-            f"**Company:** "
-            f"{selected_row['provider_a_company']}"
-        )
+provider_a_col, provider_b_col = st.columns(2)
 
-        st.write(
-            f"**Address:** "
-            f"{selected_row['provider_a_address']}"
-        )
+with provider_a_col:
+    st.write("#### Provider A")
 
-        st.write(
-            f"**Country:** "
-            f"{selected_row['provider_a_country']}"
-        )
+    st.write(
+        f"**Record ID:** "
+        f"{selected_match['provider_a_id']}"
+    )
 
-    with provider_b_col:
-        st.write("#### Provider B")
+    st.write(
+        f"**Company:** "
+        f"{selected_match['provider_a_company']}"
+    )
 
-        st.write(
-            f"**Record ID:** "
-            f"{selected_row['provider_b_id']}"
-        )
+    st.write(
+        f"**Address:** "
+        f"{selected_match['provider_a_address']}"
+    )
 
-        st.write(
-            f"**Company:** "
-            f"{selected_row['provider_b_company']}"
-        )
+    st.write(
+        f"**Country:** "
+        f"{selected_match['provider_a_country']}"
+    )
 
-        st.write(
-            f"**Address:** "
-            f"{selected_row['provider_b_address']}"
-        )
 
-        st.write(
-            f"**Country:** "
-            f"{selected_row['provider_b_country']}"
-        )
+with provider_b_col:
+    st.write("#### Provider B")
 
-    # ---------------------------------------------
-    # MATCH SIGNALS
-    # ---------------------------------------------
+    st.write(
+        f"**Record ID:** "
+        f"{selected_match['provider_b_id']}"
+    )
 
-    st.write("### Why this matched")
+    st.write(
+        f"**Company:** "
+        f"{selected_match['provider_b_company']}"
+    )
 
-    signal_col1, signal_col2 = st.columns(2)
+    st.write(
+        f"**Address:** "
+        f"{selected_match['provider_b_address']}"
+    )
 
-    with signal_col1:
+    st.write(
+        f"**Country:** "
+        f"{selected_match['provider_b_country']}"
+    )
 
+
+# -------------------------------------------------
+# WHY THIS MATCHED
+# -------------------------------------------------
+
+st.write("### Why this matched")
+
+left_signal, right_signal = st.columns(2)
+
+with left_signal:
+    street_score = selected_match[
+        "street_similarity"
+    ]
+
+    company_score = selected_match[
+        "company_similarity"
+    ]
+
+    if pd.notna(street_score):
         st.write(
             f"**Street similarity:** "
-            f"{selected_row['street_similarity'] * 100:.0f}%"
+            f"{street_score * 100:.0f}%"
         )
 
         st.progress(
-            float(selected_row["street_similarity"])
+            float(street_score)
         )
 
+    if pd.notna(company_score):
         st.write(
             f"**Company similarity:** "
-            f"{selected_row['company_similarity'] * 100:.0f}%"
+            f"{company_score * 100:.0f}%"
         )
 
         st.progress(
-            float(selected_row["company_similarity"])
+            float(company_score)
         )
 
-    with signal_col2:
 
-        if selected_row["country_match"]:
-            st.success("Country: Exact match")
-        else:
-            st.error("Country: Conflict")
-
-        if selected_row["postal_match"]:
-            st.success("Postal code: Exact match")
-        else:
-            st.warning("Postal code: Missing or different")
-
-        if selected_row["city_match"]:
-            st.success("City: Match")
-        else:
-            st.warning("City: Missing or different")
-
-    # ---------------------------------------------
-    # DECISION EXPLANATION
-    # ---------------------------------------------
-
-    st.write("### Decision Summary")
-
-    reasons = []
-
-    if selected_row["street_similarity"] >= 0.9:
-        reasons.append(
-            "The street addresses are highly similar."
+with right_signal:
+    if selected_match["country_match"]:
+        st.success(
+            "Country: Exact match"
         )
-
-    if selected_row["company_similarity"] >= 0.9:
-        reasons.append(
-            "The company names are highly similar."
-        )
-
-    if selected_row["country_match"]:
-        reasons.append(
-            "The country values match."
-        )
-
-    if selected_row["postal_match"]:
-        reasons.append(
-            "The postal codes match."
-        )
-
-    if selected_row["city_match"]:
-        reasons.append(
-            "The city values match."
-        )
-
-    if not selected_row["country_match"]:
-        st.error(
-            "The countries conflict. This should normally "
-            "prevent an automatic duplicate match."
-        )
-
     else:
-        for reason in reasons:
-            st.write(f"✓ {reason}")
+        st.error(
+            "Country: Conflict"
+        )
 
-        if selected_row["status"] == "Matched":
-            st.success(
-                "The available evidence is strong enough "
-                "to classify these records as the same entity."
-            )
+    if selected_match["city_match"]:
+        st.success(
+            "City: Match"
+        )
+    else:
+        st.warning(
+            "City: Different or uncertain"
+        )
 
-        elif selected_row["status"] == "Review":
-            st.warning(
-                "The records are similar, but the evidence "
-                "is not strong enough for an automatic merge."
-            )
+    st.info(
+        "Postal code comparison is unavailable "
+        "because the source feeds do not contain "
+        "postal codes."
+    )
+
+
+# -------------------------------------------------
+# DECISION SUMMARY
+# -------------------------------------------------
+
+st.write("### Decision Summary")
+
+reasons = []
+
+if (
+    pd.notna(
+        selected_match["street_similarity"]
+    )
+    and selected_match[
+        "street_similarity"
+    ] >= 0.90
+):
+    reasons.append(
+        "Street addresses are highly similar."
+    )
+
+if (
+    pd.notna(
+        selected_match["company_similarity"]
+    )
+    and selected_match[
+        "company_similarity"
+    ] >= 0.90
+):
+    reasons.append(
+        "Company names are highly similar."
+    )
+
+if selected_match["country_match"]:
+    reasons.append(
+        "Country values match."
+    )
+
+if selected_match["city_match"]:
+    reasons.append(
+        "City values match."
+    )
+
+for reason in reasons:
+    st.write(
+        f"✓ {reason}"
+    )
+
+
+if selected_match["status"] == "exact_baseline":
+    st.success(
+        "This pair was identified as an exact "
+        "baseline match."
+    )
+
+elif selected_match["status"] == "proposed_match":
+    st.success(
+        "The matching model classified these "
+        "records as belonging to the same entity."
+    )
+
+
+# -------------------------------------------------
+# MATCH METADATA
+# -------------------------------------------------
+
+with st.expander("Match metadata"):
+    st.write(
+        f"**Resolution run:** "
+        f"{selected_match['resolution_run_id']}"
+    )
+
+    st.write(
+        f"**Match rank:** "
+        f"{selected_match['match_rank']}"
+    )
+
+    st.write(
+        f"**Provider A record hash:** "
+        f"{selected_match['provider_a_record_id']}"
+    )
+
+    st.write(
+        f"**Provider B record hash:** "
+        f"{selected_match['provider_b_record_id']}"
+    )
