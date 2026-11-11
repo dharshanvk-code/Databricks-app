@@ -24,7 +24,10 @@ def percent(value, digits: int = 0) -> str:
 
 def escape_markdown(text) -> str:
     """Show source-feed text literally inside Markdown-rendered elements."""
-    return re.sub(r"([\\`*_{}\[\]()#+\-.!|<>~:$])", r"\\\1", str(text))
+    # Collapse line breaks first so no block-level Markdown (headings, lists,
+    # setext underlines) can form, then escape inline syntax.
+    flat = re.sub(r"\s+", " ", str(text))
+    return re.sub(r"([\\`*_{}\[\]()#+\-.!|<>~:$&=])", r"\\\1", flat)
 
 
 def cell(value) -> str:
