@@ -67,15 +67,21 @@ st.markdown(
         font-size: 1.75rem;
     }
 
-    /* Comparison table: fill the card and wrap long addresses. */
-    [data-testid="stMarkdownContainer"] table {
-        width: 100%;
+    /*
+     * Detail tables (st.table): Streamlit caps cell text at 400px on one line,
+     * which cuts off long addresses and hashes. Let cells use the full column
+     * and wrap, and keep the row-label column narrow.
+     */
+    [data-testid="stTable"] td,
+    [data-testid="stTable"] th {
+        white-space: normal;
     }
-    [data-testid="stMarkdownContainer"] th:first-child,
-    [data-testid="stMarkdownContainer"] td:first-child {
-        width: 7.5rem;
-        color: rgba(49, 51, 63, 0.6);
-        font-weight: 500;
+    [data-testid="stTable"] td [data-testid="stMarkdownContainer"] {
+        max-width: none;
+        overflow-wrap: anywhere;
+    }
+    [data-testid="stTable"] tbody th {
+        width: 11rem;
     }
     </style>
     """,

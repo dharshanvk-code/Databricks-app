@@ -1,7 +1,13 @@
+import logging
+import os
+import re
+import uuid
+
 import pandas as pd
 import streamlit as st
 
 from data import (
+    STATUS_LABELS,
     load_entities,
     load_entity_details,
     short_id,
@@ -16,11 +22,26 @@ def percent(value, digits: int = 0) -> str:
     return f"{value * 100:.{digits}f}%" if pd.notna(value) else "—"
 
 
-def md_cell(value) -> str:
-    """Make a value safe to place inside a Markdown table cell."""
+def escape_markdown(text) -> str:
+    """Show source-feed text literally inside Markdown-rendered elements."""
+    return re.sub(r"([\\`*_{}\[\]()#+\-.!|<>~:$])", r"\\\1", str(text))
+
+
+def cell(value) -> str:
+    """Table cell shown as literal text (st.table renders Markdown in cells)."""
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return "—"
-    return str(value).replace("|", "\\|").replace("\n", " ")
+    return escape_markdown(value)
+
+
+def show_load_error(message: str, error: Exception) -> None:
+    """Log the full error on the server; show users only a reference ID.
+    Set APP_DEBUG=1 to also show the traceback in the page."""
+    ref = uuid.uuid4().hex[:8]
+    logging.getLogger(__name__).error("%s (ref=%s)", message, ref, exc_info=error)
+    st.error(f"{message} Reference: `{ref}`")
+    if os.getenv("APP_DEBUG") == "1":
+        st.exception(error)
 
 
 # -------------------------------------------------
@@ -31,8 +52,7 @@ try:
     with st.spinner("Loading Gold data…"):
         df = load_entities()
 except Exception as error:  # noqa: BLE001 - surface any load failure in the UI
-    st.error("Unable to load Gold entity data.")
-    st.exception(error)
+    show_load_error("Unable to load Gold entity data.", error)
     st.info(
         "If you are running locally, Databricks authentication must also be "
         "configured on your machine. The deployed Databricks App "
@@ -245,8 +265,7 @@ st.session_state["last_scrolled_cell"] = selected_cell
 try:
     detail_df = load_entity_details(selected_entity)
 except Exception as error:  # noqa: BLE001 - surface any load failure in the UI
-    st.error("Unable to load entity match details.")
-    st.exception(error)
+    show_load_error("Unable to load entity match details.", error)
     st.stop()
 
 if detail_df.empty:
@@ -262,12 +281,12 @@ best_match = detail_df.iloc[0]
 
 st.divider()
 
-st.subheader(best_match["company"], anchor="entity-details")
+st.subheader(escape_markdown(best_match["company"]), anchor="entity-details")
 
 decision = best_match["status"]
 badge_color = "green" if decision == "exact_baseline" else "blue"
 st.markdown(
-    f":{badge_color}-badge[{status_label(decision)}] "
+    f":{badge_color}-badge[{STATUS_LABELS.get(decision, 'Other')}] "
     f":gray[Entity ID] `{selected_entity}`"
 )
 
@@ -305,20 +324,21 @@ else:
 
 st.markdown("#### Source records")
 
-with st.container(border=True):
-    rows = [
-        ("Record ID", "provider_a_id", "provider_b_id"),
-        ("Company", "provider_a_company", "provider_b_company"),
-        ("Address", "provider_a_address", "provider_b_address"),
-        ("Country", "provider_a_country", "provider_b_country"),
-    ]
-    table = ["| | Provider A | Provider B |", "|---|---|---|"]
-    for label, a_column, b_column in rows:
-        table.append(
-            f"| {label} | {md_cell(selected_match[a_column])} "
-            f"| {md_cell(selected_match[b_column])} |"
-        )
-    st.markdown("\n".join(table))
+rows = [
+    ("Record ID", "provider_a_id", "provider_b_id"),
+    ("Company", "provider_a_company", "provider_b_company"),
+    ("Address", "provider_a_address", "provider_b_address"),
+    ("Country", "provider_a_country", "provider_b_country"),
+]
+st.table(
+    pd.DataFrame(
+        {
+            "Provider A": [cell(selected_match[a]) for _, a, _ in rows],
+            "Provider B": [cell(selected_match[b]) for _, _, b in rows],
+        },
+        index=[label for label, _, _ in rows],
+    )
+)
 
 
 # -------------------------------------------------
@@ -408,13 +428,15 @@ with st.expander("Match metadata"):
             "City Jaro-Winkler",
             percent(selected_match["city_jaro_winkler_similarity"], 1),
         ),
-        ("Provider A record hash", f"`{selected_match['provider_a_record_id']}`"),
-        ("Provider B record hash", f"`{selected_match['provider_b_record_id']}`"),
+        ("Provider A record hash", selected_match["provider_a_record_id"]),
+        ("Provider B record hash", selected_match["provider_b_record_id"]),
     ]
-    table = ["| Field | Value |", "|---|---|"]
-    for label, value in metadata:
-        table.append(f"| {label} | {md_cell(value)} |")
-    st.markdown("\n".join(table))
+    st.table(
+        pd.DataFrame(
+            {"Value": [cell(value) for _, value in metadata]},
+            index=[label for label, _ in metadata],
+        )
+    )
 
 
 # -------------------------------------------------

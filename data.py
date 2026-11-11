@@ -5,6 +5,7 @@ import os
 import pandas as pd
 import streamlit as st
 from databricks.sdk import WorkspaceClient
+from databricks.sdk.service.sql import StatementParameterListItem
 
 WAREHOUSE_ID = os.getenv("SQL_WAREHOUSE_ID", "64b2e31b1ee2c8a6")
 
@@ -33,10 +34,17 @@ def _workspace() -> WorkspaceClient:
     return WorkspaceClient()
 
 
-def query_databricks(sql: str) -> pd.DataFrame:
+def query_databricks(sql: str, params: dict[str, str] | None = None) -> pd.DataFrame:
+    """Run SQL on the warehouse. Pass values via `params` (`:name` markers),
+    never by formatting them into the SQL text."""
     response = _workspace().statement_execution.execute_statement(
         warehouse_id=WAREHOUSE_ID,
         statement=sql,
+        parameters=[
+            StatementParameterListItem(name=name, value=value, type="STRING")
+            for name, value in (params or {}).items()
+        ]
+        or None,
         wait_timeout="30s",
     )
 
@@ -116,8 +124,6 @@ def load_entities() -> pd.DataFrame:
 
 @st.cache_data(ttl=CACHE_TTL, show_spinner="Loading match details…")
 def load_entity_details(entity_id: str) -> pd.DataFrame:
-    safe_entity_id = entity_id.replace("'", "''")
-
     df = query_databricks(
         f"""
         SELECT
@@ -132,9 +138,10 @@ def load_entity_details(entity_id: str) -> pd.DataFrame:
             resolution_run_id,
             resolved_at
         FROM addressresolution.gold.entity_match_details
-        WHERE entity_id = '{safe_entity_id}'
+        WHERE entity_id = :entity_id
         ORDER BY match_rank
-        """
+        """,
+        params={"entity_id": str(entity_id)},
     )
 
     df = _to_numeric(
