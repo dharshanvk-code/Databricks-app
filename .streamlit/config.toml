@@ -1,0 +1,10 @@
+[theme]
+base = "light"
+primaryColor = "#2563EB"
+textColor = "#31333F"
+
+[theme.sidebar]
+textColor = "#31333F"
+
+[browser]
+gatherUsageStats = false
