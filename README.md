@@ -1,4 +1,3 @@
-cat > README.md <<'EOF'
 # Databricks Entity Resolution App
 
 A Streamlit app deployed through Databricks Apps for exploring entity-resolution results produced by our Altana address deduplication pipeline.
