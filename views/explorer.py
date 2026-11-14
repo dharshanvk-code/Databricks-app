@@ -13,7 +13,6 @@ from data import (
     short_id,
     status_label,
 )
-from genie_chat import genie_chat
 
 ROW_HEIGHT = 35
 MAX_VISIBLE_ROWS = 12
@@ -102,11 +101,6 @@ with st.sidebar:
         load_entities.clear()
         load_entity_details.clear()
         st.rerun()
-
-    st.divider()
-
-    st.subheader("Ask the agent")
-    genie_chat()
 
 
 # -------------------------------------------------

@@ -120,6 +120,19 @@ STYLE = """
     border-bottom: 1px solid var(--line);
     scroll-margin-top: 4rem;
 }
+/* Demo: an almost empty section, the cue to switch to the live app. */
+.deck-demo {
+    min-height: 70vh;
+    display: grid;
+    place-items: center;
+}
+.deck-section.deck-demo h2 {
+    font-size: clamp(3.5rem, 9vw, 6.5rem);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    margin: 0;
+}
+
 .deck-section:last-child {
     border-bottom: none;
 }
@@ -915,7 +928,7 @@ FLOW = [
     (
         "Silver",
         "Clean and translate",
-        "33,702",
+        "33,716",
         "rows ready to match",
         (
             "We cleaned both feeds, merged them into one schema, and translated "
@@ -935,7 +948,7 @@ FLOW = [
     (
         "Gold",
         "Publish",
-        "20,058",
+        "20,538",
         "resolved addresses",
         (
             "We kept one complete address per company and location, linked to "
@@ -958,21 +971,20 @@ flow_html = (
 
 SOURCE_ROWS = 35_185
 ROW_OUTCOMES = [
-    ("Published to Gold", "the one record kept per entity", 20_058, ""),
+    ("Published to Gold", "the one record kept per entity", 20_538, ""),
     (
         "Merged into a Gold record",
-        "duplicates, incl. 1,024 incomplete rows we completed from a match",
-        13_293,
+        "duplicates, incl. 1,065 incomplete rows we completed from a match",
+        14_009,
         "",
     ),
     (
         "Held: same company, two addresses",
         "dlq_same_company_conflict",
-        1_375,
+        234,
         "is-held",
     ),
-    ("Held: city or street is blank", "dlq_incomplete", 452, "is-held"),
-    ("Waiting on translation review", "providers_translation_review", 7, "is-held"),
+    ("Held: city or street is blank", "dlq_incomplete", 404, "is-held"),
 ]
 
 
@@ -1091,8 +1103,8 @@ tiers_html = (
 TRANSLATION_STATS = [
     ("8,071", "rows needed translation"),
     ("11,929", "distinct AI requests after removing repeats"),
-    ("7,733", "rows accepted after translation"),
-    ("7", "rows left for a person to review"),
+    ("7,740", "rows accepted after translation"),
+    ("7", "rows a reviewer corrected by hand"),
 ]
 
 
@@ -1130,7 +1142,7 @@ STAGES = [
         "Exact rule",
         (
             "Same company and the same full address after fixing case and spacing. "
-            "<strong>5,548 pairs.</strong>"
+            "<strong>5,559 pairs.</strong>"
         ),
     ),
     (
@@ -1139,7 +1151,7 @@ STAGES = [
         (
             "Five passes grouped records that shared a key, such as country + city + "
             "building number. We only compared records in the same group. "
-            "<strong>41,769 pairs.</strong>"
+            "<strong>41,797 pairs.</strong>"
         ),
     ),
     (
@@ -1147,7 +1159,7 @@ STAGES = [
         "Embeddings + HNSW",
         (
             "Vector search caught what keys missed: typos, reordered words, other "
-            "scripts. <strong>979,263 more pairs.</strong>"
+            "scripts. <strong>979,677 more pairs.</strong>"
         ),
     ),
     (
@@ -1187,10 +1199,10 @@ stages_html = (
 )
 
 MATCH_STATS = [
-    ("567.9M", "possible pairs among 33,702 records"),
+    ("568.4M", "possible pairs among 33,716 records"),
     ("1.02M", "pairs actually scored (0.18%)"),
-    ("12,977", "pairs scored as matches (exact + model)"),
-    ("13,293", "duplicate rows merged into Gold records"),
+    ("12,988", "pairs scored as matches (exact + model)"),
+    ("14,009", "duplicate rows merged into Gold records"),
 ]
 
 VS_STEPS = [
@@ -1217,7 +1229,7 @@ VS_STEPS = [
         "Comparing everything was too slow",
         (
             "Finding a record's neighbors by brute force meant measuring the distance "
-            "to every other record. For 33,702 records, that's about "
+            "to every other record. For 33,716 records, that's about "
             "<strong>568 million pairs</strong>."
         ),
     ),
@@ -1246,7 +1258,7 @@ VS_STEPS = [
         (
             "We kept up to 20 new neighbors per record with cosine ≥ 0.70, skipping "
             "pairs that blocking already found. That added "
-            "<strong>979,263 candidate pairs</strong>."
+            "<strong>979,677 candidate pairs</strong>."
         ),
     ),
     (
@@ -1255,7 +1267,7 @@ VS_STEPS = [
         (
             "Every candidate still went through Jaro–Winkler, Fellegi–Sunter, and the "
             "safeguards. A close neighbor could be a different suite, or a different "
-            "company in the same building. Of the 979,263 vector-search pairs, "
+            "company in the same building. Of the 979,677 vector-search pairs, "
             "<strong>26 became matches</strong>."
         ),
     ),
@@ -1280,7 +1292,7 @@ vector_search_html = (
     '<span style="--c:#A3A8B4">Other records</span>'
     "</div>"
     '<div class="vs-caption">Illustration: about 100 dots in 2-D stand in for '
-    "33,702 records in 384-D. The example records are made up.</div>"
+    "33,716 records in 384-D. The example records are made up.</div>"
     "</div></div></div>"
 )
 
@@ -1380,7 +1392,7 @@ gold_step = step_html(
     "<li><strong>Which record won:</strong> the version the most sources agreed "
     "on, then one with a supplied (not inferred) country, then a stable ID as the "
     "tie-break.</li>"
-    "<li><strong>Filling gaps:</strong> we completed 1,024 rows missing only a city "
+    "<li><strong>Filling gaps:</strong> we completed 1,065 rows missing only a city "
     "or a street from a Gold record, but only when exactly one entity had the "
     "same company, country, and remaining address part.</li>"
     "<li><strong>Traceability:</strong> Silver kept every source row with the "
@@ -1388,7 +1400,7 @@ gold_step = step_html(
     "business fields and the provider key.</li>"
     "</ul>"
     "<p>The result was <code>addressresolution.gold.addresses_deduplicated</code>: "
-    "<strong>20,058 addresses</strong> from 35,185 source rows.</p>",
+    "<strong>20,538 addresses</strong> from 35,185 source rows.</p>",
 )
 
 DLQS = [
@@ -1396,33 +1408,33 @@ DLQS = [
         "<code>dlq_translate</code>",
         "Any field with non-Latin text",
         "8,071",
-        "We translated them. 7,733 were accepted.",
+        "We translated them. 7,740 were accepted.",
     ),
     (
         "<code>dlq_incomplete</code>",
         "Blank, too short or long, or invalid values",
-        "1,476",
+        "1,469",
         (
-            "We completed 1,024 from a Gold match. 452 stayed held for the source to "
+            "We completed 1,065 from a Gold match. 404 stayed held for the source to "
             "fix."
         ),
     ),
     (
         "<code>providers_translation_review</code>",
         "A translation failed its checks, even after the fallback",
-        "7",
-        "Left for a person to review.",
+        "0",
+        "A reviewer corrected the last 7 by hand, and the pipeline applied the fixes.",
     ),
     (
         "<code>dlq_same_company_conflict</code>",
         "Same company name at addresses the matcher wouldn't merge",
-        "1,375",
+        "234",
         "Held out of Gold until someone picks the true address.",
     ),
     (
         "<code>needs_match_review</code> flag",
         "A pair scored above 0.80 but a safeguard blocked it",
-        "452",
+        "465",
         "Kept in Gold, flagged with the neighbor to compare against.",
     ),
 ]
@@ -1815,6 +1827,8 @@ concepts_inner = (
 NAV = [(s["id"], s["title"]) for s in SECTIONS] + [
     ("approach", "Our Approach"),
     ("concepts", "Concepts and Tools We Used"),
+    ("demo", "Demo"),
+    ("next-steps", "Next Steps"),
 ]
 nav = "".join(f'<a href="#{i}">{t}</a>' for i, t in NAV)
 
@@ -1825,6 +1839,58 @@ sections = "".join(
 sections += section_html(len(SECTIONS) + 1, "approach", "Our Approach", approach_inner)
 sections += section_html(
     len(SECTIONS) + 2, "concepts", "Concepts and Tools We Used", concepts_inner
+)
+
+sections += '<section class="deck-section deck-demo" id="demo"><h2>Demo</h2></section>'
+
+NEXT_STEPS = [
+    (
+        "Measure accuracy with labeled pairs",
+        (
+            "We had no reviewed match labels, so we couldn't measure precision or "
+            "recall. We'd label a sample of pairs early, including close calls like "
+            "neighbors in the same building, and track both numbers on every run."
+        ),
+    ),
+    (
+        "Check the match probabilities",
+        (
+            "Fellegi–Sunter started from an assumed match rate, so a probability of "
+            "0.99 isn't proven to mean 99%. With labels, we'd check how often each "
+            "score is actually right."
+        ),
+    ),
+    (
+        "Build a review screen for held records",
+        (
+            "234 rows with two addresses for one company, 404 incomplete rows, and "
+            "465 flagged Gold rows still need a person. We'd give reviewers a screen "
+            "to pick the right answer and feed it back into the pipeline."
+        ),
+    ),
+    (
+        "Make new providers easier to add",
+        (
+            "Bronze reads each feed with a fixed, hand-written schema. We'd turn on "
+            "schema evolution and keep unexpected columns, so a new provider or a new "
+            "column doesn't need a code change."
+        ),
+    ),
+]
+
+next_steps_inner = (
+    "<p>Things we'd change or add with more time:</p>"
+    '<ul class="deck-list">'
+    + "".join(
+        f"<li><strong>{title}:</strong> {body}</li>" for title, body in NEXT_STEPS
+    )
+    + "</ul>"
+)
+sections += section_html(
+    len(SECTIONS) + 3,
+    "next-steps",
+    "What We'd Do Differently / Next Steps",
+    next_steps_inner,
 )
 
 script = (ASSETS / "vector_search.js").read_text(encoding="utf-8")
