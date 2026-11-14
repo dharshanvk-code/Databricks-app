@@ -11,6 +11,10 @@ from data import load_gold, load_merge
 
 ROW_HEIGHT = 35
 MAX_VISIBLE_ROWS = 9
+# Rows sent to the browser. Every click reruns the page and resends the table,
+# so a smaller table makes the row highlight show up faster. Search and the
+# country filter still look through every Gold row.
+DISPLAY_LIMIT = 500
 SELECTED_ROW_STYLE = "background-color: #DBEAFE"
 
 STEP_LABELS = {
@@ -29,6 +33,53 @@ AUTHORITY_LABELS = {
     "incomplete_fill_policy": "Missing-field fill",
     "none": "Not merged",
 }
+
+
+# Loading skeletons: grey shimmer blocks shaped like the content that is on
+# its way. Static markup only; no data goes in here.
+SKELETON_CSS = """
+<style>
+@keyframes sk-shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+.sk { display: flex; flex-direction: column; gap: 1rem; }
+.sk-bar {
+    border-radius: 0.5rem;
+    background: linear-gradient(90deg, #EEF0F4 25%, #F7F8FA 50%, #EEF0F4 75%);
+    background-size: 400% 100%;
+    animation: sk-shimmer 1.4s ease-in-out infinite;
+}
+.sk-row { display: flex; gap: 1rem; }
+.sk-row > .sk-bar { flex: 1; }
+.sk-table { border: 1px solid #E6E8EE; border-radius: 0.5rem; padding: 0.6rem; display: flex; flex-direction: column; gap: 0.6rem; }
+@media (prefers-reduced-motion: reduce) { .sk-bar { animation: none; } }
+</style>
+"""
+
+
+def skeleton(*parts: str) -> str:
+    return SKELETON_CSS + '<div class="sk">' + "".join(parts) + "</div>"
+
+
+def sk_boxes(count: int, height: str) -> str:
+    bar = f'<div class="sk-bar" style="height:{height}"></div>'
+    return f'<div class="sk-row">{bar * count}</div>'
+
+
+def sk_table(rows: int, columns: int) -> str:
+    cell = '<div class="sk-bar" style="height:1.3rem"></div>'
+    row = f'<div class="sk-row">{cell * columns}</div>'
+    return f'<div class="sk-table">{row * (rows + 1)}</div>'
+
+
+GOLD_SKELETON = skeleton(
+    sk_boxes(2, "5.5rem"),
+    '<div class="sk-bar" style="height:2rem;width:12rem;margin:0.5rem auto 0"></div>',
+    sk_table(MAX_VISIBLE_ROWS, 6),
+)
+MERGE_SKELETON = skeleton(
+    '<div class="sk-bar" style="height:1.5rem;width:24rem;max-width:100%;margin:0 auto"></div>',
+    sk_table(3, 7),
+    sk_boxes(1, "9rem"),
+)
 
 
 def percent(value, digits: int = 0) -> str:
@@ -74,13 +125,49 @@ def json_list(value) -> list:
 
 
 # -------------------------------------------------
+# HEADER
+# -------------------------------------------------
+
+st.title("Entity Explorer")
+
+# Center everything on this page. Data grid cells use column alignment.
+st.markdown(
+    """
+    <style>
+    [data-testid="stMain"] h1, [data-testid="stMain"] h2,
+    [data-testid="stMain"] h3, [data-testid="stMain"] h4,
+    [data-testid="stMain"] [data-testid="stMarkdownContainer"],
+    [data-testid="stMain"] [data-testid="stCaptionContainer"],
+    [data-testid="stMain"] [data-testid="stTable"] th,
+    [data-testid="stMain"] [data-testid="stTable"] td {
+        text-align: center !important;
+        justify-content: center;
+    }
+    [data-testid="stMain"] [data-testid="stMetric"] > div,
+    [data-testid="stMain"] [data-testid="stMetricLabel"],
+    [data-testid="stMain"] [data-testid="stMetricValue"] {
+        justify-content: center;
+        justify-items: center;
+        text-align: center;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# -------------------------------------------------
 # LOAD DATA
 # -------------------------------------------------
 
+gold_loading = st.empty()
+gold_loading.markdown(GOLD_SKELETON, unsafe_allow_html=True)
 try:
-    with st.spinner("Loading Gold data…"):
-        gold = load_gold()
+    gold = load_gold()
 except Exception as error:  # noqa: BLE001 - surface any load failure in the UI
+    gold_loading.empty()
     show_load_error("Unable to load the Gold table.", error)
     st.info(
         "If you are running locally, Databricks authentication must also be "
@@ -88,6 +175,7 @@ except Exception as error:  # noqa: BLE001 - surface any load failure in the UI
         "authenticates automatically."
     )
     st.stop()
+gold_loading.empty()
 
 
 # -------------------------------------------------
@@ -144,52 +232,21 @@ filtered = filtered.reset_index(drop=True)
 
 
 # -------------------------------------------------
-# HEADER
+# GOLD TABLE
 # -------------------------------------------------
-
-st.title("Entity Explorer")
-
-# Center everything on this page. Data grid cells use column alignment.
-st.markdown(
-    """
-    <style>
-    [data-testid="stMain"] h1, [data-testid="stMain"] h2,
-    [data-testid="stMain"] h3, [data-testid="stMain"] h4,
-    [data-testid="stMain"] [data-testid="stMarkdownContainer"],
-    [data-testid="stMain"] [data-testid="stCaptionContainer"],
-    [data-testid="stMain"] [data-testid="stTable"] th,
-    [data-testid="stMain"] [data-testid="stTable"] td {
-        text-align: center !important;
-        justify-content: center;
-    }
-    [data-testid="stMain"] [data-testid="stMetric"] > div,
-    [data-testid="stMain"] [data-testid="stMetricLabel"],
-    [data-testid="stMain"] [data-testid="stMetricValue"] {
-        justify-content: center;
-        justify-items: center;
-        text-align: center;
-        margin-left: auto;
-        margin-right: auto;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
 
 metric_1, metric_2 = st.columns(2)
 metric_1.metric("Gold addresses", f"{len(filtered):,}", border=True)
 metric_2.metric("Countries", f"{filtered['country'].nunique():,}", border=True)
-
-
-# -------------------------------------------------
-# GOLD TABLE
-# -------------------------------------------------
 
 st.subheader("Gold table")
 
 if filtered.empty:
     st.warning("No addresses match the selected filters.")
     st.stop()
+
+total_matches = len(filtered)
+filtered = filtered.head(DISPLAY_LIMIT)
 
 display = pd.DataFrame(
     {
@@ -247,7 +304,13 @@ event = st.dataframe(
 
 selected_cells = event.selection.cells
 if not selected_cells or selected_cells[0][0] >= len(filtered):
-    st.caption("Click a row to see its merged records.")
+    if total_matches > DISPLAY_LIMIT:
+        st.caption(
+            f"Showing a random {DISPLAY_LIMIT:,} of {total_matches:,} addresses. "
+            "Search or filter to find others. Click a row to see its merged records."
+        )
+    else:
+        st.caption("Click a row to see its merged records.")
     st.stop()
 
 selected_cell = selected_cells[0]
@@ -270,12 +333,15 @@ st.session_state["last_scrolled_cell"] = selected_cell
 st.divider()
 st.subheader(escape_markdown(selected["company"]), anchor="merge-details")
 
+merge_loading = st.empty()
+merge_loading.markdown(MERGE_SKELETON, unsafe_allow_html=True)
 try:
-    with st.spinner("Loading merged records from Silver…"):
-        merge = load_merge(selected["provider"], selected["provider_id"])
+    merge = load_merge(selected["provider"], selected["provider_id"])
 except Exception as error:  # noqa: BLE001 - surface any load failure in the UI
+    merge_loading.empty()
     show_load_error("Unable to load the merged records.", error)
     st.stop()
+merge_loading.empty()
 
 if merge.empty:
     st.warning("No Silver records found for this address.")
@@ -413,10 +479,13 @@ if should_scroll:
     st.html(
         f"""
         <script data-nonce="{st.session_state["scroll_nonce"]}">
-        setTimeout(() => {{
-            document.getElementById("merge-details")
-                ?.scrollIntoView({{ behavior: "smooth", block: "start" }});
-        }}, 50);
+        // Scroll to the bottom of the page, where the merge details are.
+        // Retry a few times: Streamlit can still be swapping in elements
+        // (and changing the page height) when this first runs.
+        [50, 400, 1000].forEach((delay) => setTimeout(() => {{
+            const main = document.querySelector('[data-testid="stMain"]');
+            main?.scrollTo({{ top: main.scrollHeight, behavior: "smooth" }});
+        }}, delay));
         </script>
         """,
         unsafe_allow_javascript=True,
