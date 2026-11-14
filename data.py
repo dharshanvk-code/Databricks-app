@@ -64,7 +64,9 @@ def load_gold() -> pd.DataFrame:
         f"""
         SELECT company, street_address, city, state, country, provider, provider_id
         FROM {GOLD_TABLE}
-        ORDER BY company, provider, provider_id
+        -- Random order, so the explorer opens on a mixed sample. The cache
+        -- keeps it the same for an hour.
+        ORDER BY rand()
         """
     )
 

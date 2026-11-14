@@ -10,7 +10,7 @@ import streamlit as st
 from data import load_gold, load_merge
 
 ROW_HEIGHT = 35
-MAX_VISIBLE_ROWS = 12
+MAX_VISIBLE_ROWS = 9
 SELECTED_ROW_STYLE = "background-color: #DBEAFE"
 
 STEP_LABELS = {
@@ -32,6 +32,7 @@ AUTHORITY_LABELS = {
 
 
 def percent(value, digits: int = 0) -> str:
+    value = pd.to_numeric(value, errors="coerce")
     return f"{value * 100:.{digits}f}%" if pd.notna(value) else "—"
 
 
@@ -66,9 +67,10 @@ def show_load_error(message: str, error: Exception) -> None:
 
 def json_list(value) -> list:
     try:
-        return json.loads(value) or []
+        data = json.loads(value)
     except (TypeError, ValueError):
         return []
+    return data if isinstance(data, list) else []
 
 
 # -------------------------------------------------
@@ -146,9 +148,32 @@ filtered = filtered.reset_index(drop=True)
 # -------------------------------------------------
 
 st.title("Entity Explorer")
-st.caption(
-    "Every row is one resolved address in the Gold table. Click a row to see "
-    "the source records that were merged into it, and why."
+
+# Center everything on this page. Data grid cells use column alignment.
+st.markdown(
+    """
+    <style>
+    [data-testid="stMain"] h1, [data-testid="stMain"] h2,
+    [data-testid="stMain"] h3, [data-testid="stMain"] h4,
+    [data-testid="stMain"] [data-testid="stMarkdownContainer"],
+    [data-testid="stMain"] [data-testid="stCaptionContainer"],
+    [data-testid="stMain"] [data-testid="stTable"] th,
+    [data-testid="stMain"] [data-testid="stTable"] td {
+        text-align: center !important;
+        justify-content: center;
+    }
+    [data-testid="stMain"] [data-testid="stMetric"] > div,
+    [data-testid="stMain"] [data-testid="stMetricLabel"],
+    [data-testid="stMain"] [data-testid="stMetricValue"] {
+        justify-content: center;
+        justify-items: center;
+        text-align: center;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 
 metric_1, metric_2 = st.columns(2)
@@ -207,13 +232,14 @@ event = st.dataframe(
     height=ROW_HEIGHT * (min(len(display), MAX_VISIBLE_ROWS) + 1) + 3,
     width="stretch",
     column_config={
-        "Company": st.column_config.TextColumn(width=170),
-        "Street address": st.column_config.TextColumn(width=220),
-        "City": st.column_config.TextColumn(width=110),
-        "State": st.column_config.TextColumn(width=100),
-        "Country": st.column_config.TextColumn(width=64),
+        "Company": st.column_config.TextColumn(alignment="center", width=190),
+        "Street address": st.column_config.TextColumn(alignment="center", width=200),
+        "City": st.column_config.TextColumn(alignment="center", width=110),
+        "State": st.column_config.TextColumn(alignment="center", width=105),
+        "Country": st.column_config.TextColumn(alignment="center", width=60),
         "Source": st.column_config.TextColumn(
-            width=76,
+            alignment="center",
+            width=70,
             help="Provider and record ID of the canonical source record.",
         ),
     },
@@ -256,8 +282,9 @@ if merge.empty:
     st.stop()
 
 canonical = merge.iloc[0]
+# Escaped once here: labels go into Markdown below.
 labels = {
-    row["record_id"]: source_label(row["provider"], row["provider_id"])
+    row["record_id"]: escape_markdown(source_label(row["provider"], row["provider_id"]))
     for _, row in merge.iterrows()
 }
 
@@ -266,7 +293,7 @@ st.markdown(
     f":blue-badge[{len(merge)} source "
     f"{'record' if len(merge) == 1 else 'records'}] "
     f":gray-badge[Merged by: {authority}] "
-    f":gray[Entity ID] `{canonical['entity_id']}`"
+    f":gray[Entity ID] {escape_markdown(canonical['entity_id'])}"
 )
 
 st.markdown("#### Source records")
@@ -278,7 +305,7 @@ st.table(
                 for _, row in merge.iterrows()
             ],
             # Non-breaking hyphen keeps "A-123" on one line.
-            "Source": [labels[r].replace("-", "\u2011") for r in merge["record_id"]],
+            "Source": [labels[r].replace("\\-", "\u2011") for r in merge["record_id"]],
             "Company": merge["company"].map(cell),
             "Street address": merge["street_address"].map(cell),
             "City": merge["city"].map(cell),
@@ -307,6 +334,8 @@ if len(merge) == 1:
 pairs = {}
 for _, row in merge.iterrows():
     for evidence in json_list(row["evidence_json"]):
+        if not isinstance(evidence, dict):
+            continue
         other = evidence.get("other_record_id")
         key = frozenset((row["record_id"], other))
         if other and key not in pairs:
@@ -318,7 +347,7 @@ for record_id, other_id, evidence in pairs.values():
         st.markdown(
             f"**{labels.get(record_id, 'Record')} ↔ "
             f"{labels.get(other_id, 'another record')}** · "
-            f":gray[{STEP_LABELS.get(step, step or 'Merge')}]"
+            f":gray[{STEP_LABELS.get(step) or escape_markdown(step or 'Merge')}]"
         )
         if evidence.get("reason"):
             st.markdown(escape_markdown(evidence["reason"]))
@@ -330,19 +359,23 @@ for record_id, other_id, evidence in pairs.values():
             ("City similarity", evidence.get("city_jaro_winkler_similarity")),
             ("Embedding similarity", evidence.get("record_cosine")),
         ]
-        scores = [(label, value) for label, value in scores if value is not None]
+        scores = [
+            (label, value)
+            for label, value in scores
+            if pd.notna(pd.to_numeric(value, errors="coerce"))
+        ]
         if scores:
             columns = st.columns(len(scores))
             for column, (label, value) in zip(columns, scores, strict=True):
                 column.metric(label, percent(value, 1))
 
         if evidence.get("blocking_passes"):
-            passes = evidence["blocking_passes"].replace(",", ", ")
+            passes = str(evidence["blocking_passes"]).replace(",", ", ")
             st.caption(f"Found by blocking passes: {escape_markdown(passes)}")
 
 filled = merge[merge["filled_field"].fillna("") != ""]
 for _, row in filled.iterrows():
-    field = str(row["filled_field"]).replace("_", " ")
+    field = escape_markdown(str(row["filled_field"]).replace("_", " "))
     donor = labels.get(row["filled_from_record_id"], "a matching record")
     st.info(
         f"The {field} of {labels[row['record_id']]} was missing, so it was "
