@@ -336,6 +336,9 @@ _CSS = """
 }
 
 /* Starter prompts as cards, follow-ups as chips. */
+.st-key-genie_starters {
+    margin-bottom: 3rem;
+}
 [class*="st-key-genie_starter"] button {
     justify-content: flex-start;
     text-align: left;
@@ -445,7 +448,10 @@ def _chat() -> None:
             "it on the Gold table, and explains the result.</p></div>",
             unsafe_allow_html=True,
         )
-        left, right = st.columns(2)
+        # Keyed container so the CSS can keep the suggestions clear of the
+        # chat input pinned to the bottom of the page.
+        with st.container(key="genie_starters"):
+            left, right = st.columns(2)
         for index, question in enumerate(STARTER_QUESTIONS):
             (left if index % 2 == 0 else right).button(
                 question,
