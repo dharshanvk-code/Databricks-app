@@ -2,7 +2,7 @@ import contextlib
 
 import streamlit as st
 
-from data import load_entities
+from data import load_gold
 
 st.set_page_config(
     page_title="Altana x Databricks",
@@ -88,28 +88,38 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-navigation = st.navigation(
-    [
-        st.Page(
-            "views/presentation.py",
-            title="Presentation",
-            icon=":material/slideshow:",
-            url_path="presentation",
-        ),
-        st.Page(
-            "views/explorer.py",
-            title="Entity Explorer",
-            icon=":material/table_view:",
-            default=True,
-        ),
-        st.Page(
-            "views/agent.py",
-            title="Genie Agent",
-            icon=":material/forum:",
-            url_path="agent",
-        ),
-    ]
+presentation = st.Page(
+    "views/presentation.py",
+    title="Presentation",
+    icon=":material/slideshow:",
+    url_path="presentation",
 )
+explorer = st.Page(
+    "views/explorer.py",
+    title="Entity Explorer",
+    icon=":material/table_view:",
+    url_path="explorer",
+)
+agent = st.Page(
+    "views/agent.py",
+    title="Genie Agent",
+    icon=":material/forum:",
+    url_path="agent",
+)
+
+
+def open_presentation() -> None:
+    st.switch_page(presentation)
+
+
+# "/" only redirects to /presentation. It is hidden from the menu, so the
+# sidebar links below stand in for Streamlit's own page list.
+home = st.Page(open_presentation, title="Home", default=True)
+navigation = st.navigation([home, presentation, explorer, agent], position="hidden")
+
+with st.sidebar:
+    for page in (presentation, explorer, agent):
+        st.page_link(page)
 
 navigation.run()
 
@@ -117,4 +127,4 @@ navigation.run()
 # the Entity Explorer from another page is instant.
 # The explorer page reports load errors itself, so ignore them here.
 with contextlib.suppress(Exception):
-    load_entities()
+    load_gold()

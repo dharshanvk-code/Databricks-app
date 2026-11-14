@@ -1,4 +1,4 @@
-"""Databricks SQL access and Gold-table loaders shared by all pages."""
+"""Databricks SQL access and the Gold/Silver loaders shared by all pages."""
 
 import os
 
@@ -9,24 +9,9 @@ from databricks.sdk.service.sql import StatementParameterListItem
 
 WAREHOUSE_ID = os.getenv("SQL_WAREHOUSE_ID", "64b2e31b1ee2c8a6")
 
-STATUS_LABELS = {
-    "exact_baseline": "Exact match",
-    "proposed_match": "Proposed match",
-}
-
-SHORT_ID_LENGTH = 8
-
 # Gold tables change only when the pipeline reruns, so keep results for an
 # hour. The "Refresh data" button clears the cache on demand.
 CACHE_TTL = "1h"
-
-
-def status_label(status) -> str:
-    return STATUS_LABELS.get(status, str(status))
-
-
-def short_id(entity_id: str) -> str:
-    return str(entity_id)[:SHORT_ID_LENGTH]
 
 
 @st.cache_resource
@@ -67,94 +52,61 @@ def query_databricks(sql: str, params: dict[str, str] | None = None) -> pd.DataF
     return pd.DataFrame(response.result.data_array, columns=columns)
 
 
-def _to_numeric(df: pd.DataFrame, columns) -> pd.DataFrame:
-    for column in columns:
-        if column in df.columns:
-            df[column] = pd.to_numeric(df[column], errors="coerce")
-    return df
-
-
-def _to_boolean(df: pd.DataFrame, columns) -> pd.DataFrame:
-    for column in columns:
-        if column in df.columns:
-            df[column] = df[column].map(
-                lambda value: str(value).lower() == "true" if pd.notna(value) else None
-            )
-    return df
-
-
-_MATCH_COLUMNS = """
-    entity_id,
-    company,
-    canonical_address,
-    country,
-    match_score,
-    status,
-    provider_a_id,
-    provider_b_id,
-    provider_a_company,
-    provider_b_company,
-    provider_a_address,
-    provider_b_address,
-    provider_a_country,
-    provider_b_country,
-    street_similarity,
-    company_similarity,
-    city_match,
-    postal_match,
-    country_match
-"""
-
-_BOOLEAN_COLUMNS = ["city_match", "postal_match", "country_match"]
+GOLD_TABLE = "addressresolution.gold.addresses_deduplicated"
+# Silver keeps every source record with its entity ID and the evidence for
+# each merge. Gold has one canonical row per entity.
+SILVER_TABLE = "addressresolution.silver.addresses_deduplication"
 
 
 @st.cache_data(ttl=CACHE_TTL, show_spinner=False)
-def load_entities() -> pd.DataFrame:
-    df = query_databricks(
+def load_gold() -> pd.DataFrame:
+    return query_databricks(
         f"""
-        SELECT {_MATCH_COLUMNS}
-        FROM addressresolution.gold.entity_matches
-        ORDER BY match_score DESC
+        SELECT company, street_address, city, state, country, provider, provider_id
+        FROM {GOLD_TABLE}
+        ORDER BY company, provider, provider_id
         """
     )
 
-    df = _to_numeric(df, ["match_score", "street_similarity", "company_similarity"])
-    return _to_boolean(df, _BOOLEAN_COLUMNS)
 
-
-@st.cache_data(ttl=CACHE_TTL, show_spinner="Loading match details…")
-def load_entity_details(entity_id: str) -> pd.DataFrame:
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
+def load_merge(provider: str, provider_id: str) -> pd.DataFrame:
+    """All Silver records merged into the Gold row (provider, provider_id).
+    The canonical record comes first. JSON columns hold the merge evidence."""
     df = query_databricks(
         f"""
+        WITH canonical AS (
+            SELECT entity_id
+            FROM {SILVER_TABLE}
+            WHERE provider = :provider AND provider_id = :provider_id
+              AND is_canonical
+        )
         SELECT
-            {_MATCH_COLUMNS},
-            match_rank,
-            provider_a_record_id,
-            provider_b_record_id,
-            company_levenshtein_similarity,
-            street_jaro_winkler_similarity,
-            city_jaro_winkler_similarity,
-            match_weight,
-            resolution_run_id,
-            resolved_at
-        FROM addressresolution.gold.entity_match_details
-        WHERE entity_id = :entity_id
-        ORDER BY match_rank
+            s.record_id,
+            s.provider,
+            s.provider_id,
+            s.company,
+            s.street_address,
+            s.city,
+            s.state,
+            s.country,
+            s.entity_id,
+            s.is_canonical,
+            s.deduplication_status,
+            s.cluster_record_count,
+            s.merge_authority,
+            s.filled_field,
+            s.filled_from_record_id,
+            s.resolved_at,
+            to_json(s.deduplication_steps) AS steps_json,
+            to_json(s.deduplication_reasons) AS reasons_json,
+            to_json(s.deduplication_evidence) AS evidence_json
+        FROM {SILVER_TABLE} s
+        JOIN canonical c ON s.entity_id = c.entity_id
+        ORDER BY s.is_canonical DESC, s.provider, s.provider_id
         """,
-        params={"entity_id": str(entity_id)},
+        params={"provider": str(provider), "provider_id": str(provider_id)},
     )
-
-    df = _to_numeric(
-        df,
-        [
-            "match_score",
-            "street_similarity",
-            "company_similarity",
-            "company_levenshtein_similarity",
-            "street_jaro_winkler_similarity",
-            "city_jaro_winkler_similarity",
-            "match_weight",
-            "match_rank",
-        ],
-    )
-    return _to_boolean(df, _BOOLEAN_COLUMNS)
+    if not df.empty:
+        df["is_canonical"] = df["is_canonical"].map(lambda v: str(v).lower() == "true")
+    return df
