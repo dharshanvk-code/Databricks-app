@@ -56,6 +56,49 @@ st.markdown(
         transition: none !important;
     }
 
+    /*
+     * Agent chat in the sidebar (genie_chat.py). The sidebar is narrow, so
+     * drop the avatars and mark questions with a white bubble instead.
+     */
+    [data-testid="stSidebar"] [data-testid="stChatMessage"] {
+        padding: 0;
+        gap: 0;
+        background: transparent;
+    }
+    [data-testid="stSidebar"] [data-testid^="stChatMessageAvatar"] {
+        display: none;
+    }
+    [data-testid="stSidebar"] [data-testid="stChatMessage"]:has(
+        [data-testid="stChatMessageAvatarUser"]
+    ) {
+        box-sizing: border-box;
+        width: calc(100% - 1.5rem);
+        margin-left: 1.5rem;
+        padding: 0.6rem 0.85rem;
+        border-radius: 0.75rem;
+        background: #FFFFFF;
+    }
+    .genie-progress {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        color: rgba(49, 51, 63, 0.6);
+        font-size: 0.875rem;
+    }
+    .genie-progress::before {
+        content: "";
+        flex: none;
+        width: 0.9rem;
+        height: 0.9rem;
+        border: 2px solid rgba(37, 99, 235, 0.25);
+        border-top-color: #2563EB;
+        border-radius: 50%;
+        animation: genie-spin 0.8s linear infinite;
+    }
+    @keyframes genie-spin {
+        to { transform: rotate(360deg); }
+    }
+
     /* Tighter top spacing for the main column. */
     [data-testid="stMainBlockContainer"] {
         padding-top: 3rem;

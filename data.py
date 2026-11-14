@@ -30,14 +30,14 @@ def short_id(entity_id: str) -> str:
 
 
 @st.cache_resource
-def _workspace() -> WorkspaceClient:
+def workspace() -> WorkspaceClient:
     return WorkspaceClient()
 
 
 def query_databricks(sql: str, params: dict[str, str] | None = None) -> pd.DataFrame:
     """Run SQL on the warehouse. Pass values via `params` (`:name` markers),
     never by formatting them into the SQL text."""
-    response = _workspace().statement_execution.execute_statement(
+    response = workspace().statement_execution.execute_statement(
         warehouse_id=WAREHOUSE_ID,
         statement=sql,
         parameters=[

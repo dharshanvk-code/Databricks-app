@@ -10,3 +10,5 @@ command:
 env:
   - name: SQL_WAREHOUSE_ID
     value: "64b2e31b1ee2c8a6"
+  - name: GENIE_SPACE_ID
+    valueFrom: genie-space

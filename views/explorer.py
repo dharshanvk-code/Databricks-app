@@ -13,6 +13,7 @@ from data import (
     short_id,
     status_label,
 )
+from genie_chat import genie_chat
 
 ROW_HEIGHT = 35
 MAX_VISIBLE_ROWS = 12
@@ -105,41 +106,7 @@ with st.sidebar:
     st.divider()
 
     st.subheader("Ask the agent")
-    question = st.text_input(
-        "Ask about the data",
-        placeholder="How many are matched?",
-        label_visibility="collapsed",
-    )
-
-    if question:
-        q = question.lower()
-
-        if "matched" in q and "how many" in q:
-            st.success(f"There are {len(df):,} resolved entities.")
-
-        elif "under 85" in q or "below 85" in q:
-            low_confidence = df[df["match_score"] < 0.85]
-
-            if low_confidence.empty:
-                st.info("There are no matches below 85%.")
-            else:
-                st.dataframe(
-                    pd.DataFrame(
-                        {
-                            "ID": low_confidence["entity_id"].map(short_id),
-                            "Company": low_confidence["company"],
-                            "Score": low_confidence["match_score"] * 100,
-                        }
-                    ),
-                    hide_index=True,
-                    column_config={
-                        "Score": st.column_config.NumberColumn(format="%.1f%%"),
-                    },
-                )
-        else:
-            st.caption(
-                "Try asking:\n\n- How many are matched?\n- Show matches under 85%"
-            )
+    genie_chat()
 
 
 # -------------------------------------------------
