@@ -6,9 +6,9 @@ Guidance for coding agents working in this repo. `AGENTS.md` is a symlink to thi
 
 A Streamlit app, deployed with Databricks Apps, for the Tech@NYU × Databricks × Altana address resolution project. The pipeline itself (Bronze → Silver → Matching → Gold) lives in the Databricks workspace, not here. This app reads its results.
 
-Three pages, wired up in `app.py`:
+Three pages, wired up in `app.py`. `/` redirects to `/presentation`; the sidebar links are our own `st.page_link`s because the redirect page is hidden from Streamlit's menu.
 
-- **Entity Explorer** (`views/explorer.py`): reads the Gold views through a SQL warehouse (`data.py`). Read-only.
+- **Entity Explorer** (`views/explorer.py`, at `/explorer`): lists the Gold table `addressresolution.gold.addresses_deduplicated` through a SQL warehouse (`data.py`). Clicking a row highlights it and loads the merged source records and merge evidence from `addressresolution.silver.addresses_deduplication` (joined on the canonical record's `provider` and `provider_id`). Read-only.
 - **Genie Agent** (`views/agent.py`, logic and styles in `genie_chat.py`): a full-page chat with the "Golden Address Resolver" Databricks Genie agent. Each answer shows the agent's plan, SQL, and result in a "Worked for Ns" expander.
 - **Presentation** (`views/presentation.py`): a scrolling write-up of the project for the final presentation. Sections: The Problem, Why It Matters, Our Approach, Concepts and Tools We Used. All its content is static HTML written in Python. It does not query anything at runtime.
 
@@ -54,6 +54,8 @@ Things that break it:
 - Run the app with `.venv/bin/streamlit run app.py`, then open `/presentation`. Check it at desktop and phone widths (about 390 px). Scroll through every step of the diagram, and confirm there's no horizontal overflow and no new console errors. Two `_stcore` 404s when you load `/presentation` directly are expected.
 
 ## Rules
+
+- Keep `databricks-sdk` pinned in `requirements.txt`. The Apps runtime otherwise keeps an older preinstalled SDK that lacks newer Genie enums (for example `MessageStatus.PENDING_WAREHOUSE`).
 
 - Don't change workspace paths or Unity Catalog table names in code.
 - Don't sync, start, or edit teammates' pipelines in the workspace.

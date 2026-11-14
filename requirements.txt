@@ -1,3 +1,4 @@
 streamlit==1.56.0
-pandas
-databricks-sdk
+pandas==3.1.1
+# Pinned: the Apps runtime ships an older SDK without MessageStatus.PENDING_WAREHOUSE.
+databricks-sdk==0.164.0
