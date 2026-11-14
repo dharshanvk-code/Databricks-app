@@ -9,6 +9,7 @@ A Streamlit app, deployed with Databricks Apps, for the Tech@NYU Ã— Databricks Ã
 Two pages, wired up in `app.py`:
 
 - **Entity Explorer** (`views/explorer.py`): reads the Gold views through a SQL warehouse (`data.py`). Read-only.
+  Its sidebar has a chat with the "Golden Address Resolver" Genie agent (`genie_chat.py`).
 - **Presentation** (`views/presentation.py`): a scrolling write-up of the project for the final presentation. Sections: The Problem, Why It Matters, Our Approach, Concepts and Tools We Used. All its content is static HTML written in Python. It does not query anything at runtime.
 
 All project data is synthetic. Live tables are in the `addressresolution` Unity Catalog.
@@ -33,6 +34,13 @@ Things that break it:
 - Streamlit scrolls the inner `[data-testid=stMain]` container, not the window. Listen for scroll in the capture phase on `document`. `position: sticky` works.
 - Monospace fonts lack CJK and Cyrillic glyphs. Write non-Latin examples as quoted text, not `<code>`.
 - Logos (`views/assets/altana.svg`, `views/assets/databricks.svg`) are the companies' official header SVGs. Because inline SVG is stripped, they're embedded as `<img>` data URIs.
+
+## Genie chat
+
+- The app reaches the agent through its `genie-space` app resource (Can run), which `app.yaml` maps to `GENIE_SPACE_ID`. The agent queries `addressresolution.gold.addresses_deduplicated`, so the app's service principal needs `SELECT` on it.
+- Answers take 10-60 seconds. Don't block on them: the question is submitted without waiting, and a fragment with `run_every` checks once every 2 seconds while one is pending. Blocking would freeze the page.
+- Show Genie errors as a short message with a reference ID and log the details. Don't show raw API errors to users.
+- Genie's text is Markdown. Render it with `st.markdown`, never with `unsafe_allow_html`.
 
 ## Layout
 

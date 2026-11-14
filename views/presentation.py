@@ -1026,11 +1026,7 @@ bronze_step = step_html(
     "Ingestion",
     "<p>We ingested two synthetic datasets with <strong>35,185 records</strong> "
     "(17,557 from Provider A and 17,628 from Provider B) using "
-    "<strong>Auto Loader</strong> streams. Each provider had its own explicit "
-    "all-string schema, so raw values were never coerced, plus ingestion metadata "
-    "(time, source file, provider). The pipeline loads every stream definition in "
-    "its source folder, so onboarding a new provider schema meant adding one "
-    "definition instead of building a new pipeline.</p>",
+    "<strong>Auto Loader</strong>.</p>",
 )
 
 silver_step = step_html(
