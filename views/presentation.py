@@ -11,9 +11,85 @@ ASSETS = Path(__file__).parent / "assets"
 # silver.address_pipeline_accounting, silver.dlq_routing_audit, and the
 # scoring run 181739853920898_unified_1 that built the current Gold table.
 
+PROBLEM_HTML = """
+<p class="lead"><span>Supply chain intelligence runs on addresses</span><em>Addresses have no standard</em></p>
+<div class="records">
+  <div class="records-title">One company, four records</div>
+  <div class="rec"><span class="src">PROVIDER A</span><span>Okada Foods Co., Ltd. · 458 Okada Street, Suite 4 · Osaka, Japan</span></div>
+  <div class="rec"><span class="src">PROVIDER B</span><span>OKADA FOODS · 458 Okada St, Ste 4 · Osaka, JP</span></div>
+  <div class="rec"><span class="src">PROVIDER B</span><span>岡田食品株式会社 · 岡田通 458 · 大阪市, JP</span></div>
+  <div class="rec"><span class="src">PROVIDER A</span><span>Okada Foods · <span class="gap">street missing</span> · Osaka, Japan</span></div>
+  <div class="records-q">Same place? <span>A person can tell. A machine, across millions of rows, can't.</span></div>
+</div>
+<div class="causes">
+  <div class="cause">
+    <div class="n">01</div>
+    <h4>No global format</h4>
+    <p>Street hierarchies in the US, block numbers in Japan, landmark directions elsewhere.</p>
+    <p class="proof"><b>1 in 5</b> of our records were in a non-Latin script</p>
+  </div>
+  <div class="cause">
+    <div class="n">02</div>
+    <h4>Sources disagree</h4>
+    <p>Every provider has its own schema, spelling and abbreviations, and fields go missing.</p>
+    <p class="proof"><b>1,469</b> records had a blank or invalid field</p>
+  </div>
+  <div class="cause">
+    <div class="n">03</div>
+    <h4>Scale breaks brute force</h4>
+    <p>Checking every record against every other doesn't finish once data grows.</p>
+    <p class="proof"><b>568M</b> possible pairs from just 33,716 records</p>
+  </div>
+</div>
+<div class="rule ctx-callout"><p><strong>Our goal.</strong> Turn messy, multilingual address feeds into one trusted address per company that a machine can use at scale.</p></div>
+"""
+
+WHY_HTML = """
+<p class="lead"><span>Address resolution is the foundation</span><em>Every customer answer depends on it</em></p>
+<div class="chain">
+  <div class="link"><div class="k">Input</div><h4>Provider feeds</h4><p>Shipment records, registries and manifests from many sources</p></div>
+  <div class="arrow">→</div>
+  <div class="link hl"><div class="k">Our project</div><h4>Address resolution</h4><p>One trusted address per company, with a reason for each decision</p></div>
+  <div class="arrow">→</div>
+  <div class="link"><div class="k">Internal</div><h4>Supply chain graph</h4><p>Who makes what, where it comes from, how it moves</p></div>
+  <div class="arrow">→</div>
+  <div class="link"><div class="k">Customer-facing</div><h4>Decisions</h4>
+    <div class="uses3">
+      <div><b>Supply chain risk</b><small>Which suppliers sit behind my products</small></div>
+      <div><b>Scenario modeling</b><small>What breaks if a port closes or a disaster hits</small></div>
+      <div><b>Forced labor detection</b><small>Whether goods trace back to a flagged supplier</small></div>
+    </div>
+  </div>
+</div>
+<p class="chain-note">An internal layer, but every customer-facing answer is only as good as the match underneath it.</p>
+<div class="risk3">
+  <div class="risk-h">The cost of getting it wrong</div>
+  <div class="err">
+    <div class="k">Wrong match</div>
+    <h4>Companies merged or split wrongly</h4>
+    <p>Merge too much and two businesses in one building become one. Merge too little and one supplier hides behind many spellings.</p>
+    <p class="guard">How we prevent it: merge rule and hard safeguards</p>
+  </div>
+  <div class="err">
+    <div class="k">Wrong address</div>
+    <h4>Right company, wrong location</h4>
+    <p>A stale or incomplete version wins, or a translation swaps in a real but different place.</p>
+    <p class="ex">“West Vanessaport” came back as “West Vancouver”</p>
+    <p class="guard">How we prevent it: translation checks and winner rules</p>
+  </div>
+  <div class="err">
+    <div class="k">Lost trust</div>
+    <h4>Dropped or unexplained records</h4>
+    <p>A row silently disappears, or nobody can say why two records were merged.</p>
+    <p class="guard">How we prevent it: dead letter queues and full traceability</p>
+  </div>
+</div>
+<div class="rule ctx-callout"><p><strong>Our stance.</strong> When unsure, don't merge. A missed match can be reviewed later. A wrong merge silently corrupts the graph.</p></div>
+"""
+
 SECTIONS = [
-    {"id": "problem", "title": "The Problem", "body": PLACEHOLDER},
-    {"id": "why", "title": "Why It Matters", "body": PLACEHOLDER},
+    {"id": "problem", "title": "The Problem", "body": PROBLEM_HTML},
+    {"id": "why", "title": "Why It Matters", "body": WHY_HTML},
 ]
 
 STYLE = """
@@ -891,6 +967,116 @@ STYLE = """
         transition: none;
     }
 }
+
+/* 01 The Problem and 02 Why It Matters. Reuse the deck tokens. */
+.deck .lead {
+    display: block;
+    font-size: clamp(1.35rem, 2.4vw, 1.75rem);
+    font-weight: 700;
+    line-height: 1.3;
+    letter-spacing: -0.015em;
+    color: var(--ink);
+    max-width: 46rem;
+    margin: 0.25rem auto 2.25rem;
+}
+.deck .lead em { font-style: normal; color: var(--accent); }
+
+/* One company, many records */
+.records {
+    max-width: 44rem;
+    margin: 0 auto;
+    border: 1px solid var(--line);
+    border-radius: 0.9rem;
+    padding: 1.1rem 1.25rem 1rem;
+    text-align: left;
+}
+.records-title {
+    font-size: 0.78rem; font-weight: 650; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--faint); text-align: center;
+    margin-bottom: 0.8rem;
+}
+.rec {
+    display: grid;
+    grid-template-columns: 5.5rem 1fr;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.55rem 0.75rem;
+    border-radius: 0.55rem;
+    background: var(--panel);
+    font-size: 0.98rem;
+    margin-top: 0.4rem;
+}
+.rec .src { font-size: 0.75rem; font-weight: 650; color: var(--faint); letter-spacing: 0.04em; }
+.rec .gap { color: var(--bad); font-style: italic; }
+.records-q {
+    text-align: center; margin-top: 0.9rem;
+    font-size: 1rem; color: var(--ink); font-weight: 650;
+}
+.records-q span { color: var(--muted); font-weight: 400; }
+
+/* Root causes */
+.causes {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin-top: 2.25rem;
+    text-align: left;
+}
+.cause {
+    border-top: 3px solid var(--accent);
+    background: #fff;
+    padding: 0.9rem 0.25rem 0;
+}
+.cause .n { font-size: 0.8rem; font-weight: 700; color: var(--accent); }
+.cause h4 { font-size: 1.1rem; font-weight: 700; margin: 0.25rem 0 0.35rem; padding: 0; }
+.cause p { font-size: 0.95rem !important; line-height: 1.55 !important; margin: 0 !important; max-width: none !important; }
+.cause .proof { margin-top: 0.7rem !important; font-size: 0.85rem !important; color: var(--ink) !important; }
+.cause .proof b { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+
+/* Value chain */
+.chain {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr auto 1fr auto 1.25fr;
+    align-items: stretch;
+    gap: 0.5rem;
+    text-align: left;
+}
+.link {
+    border: 1px solid var(--line);
+    border-radius: 0.75rem;
+    padding: 0.9rem 1rem;
+    background: #fff;
+}
+.link.hl { border: 2px solid var(--accent); background: var(--accent-soft); }
+.link .k { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--faint); }
+.link.hl .k { color: var(--accent); }
+.link h4 { font-size: 1.05rem; font-weight: 700; margin: 0.3rem 0 0.3rem; padding: 0; }
+.link p { font-size: 0.88rem !important; line-height: 1.5 !important; margin: 0 !important; }
+.arrow { align-self: center; color: var(--faint); font-size: 1.3rem; }
+.uses { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; }
+.uses span {
+    font-size: 0.78rem; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 999px; padding: 0.15rem 0.55rem; color: var(--ink);
+}
+.chain-note { font-size: 0.9rem !important; margin-top: 0.8rem !important; }
+
+/* Cost of error */
+.risk-h { grid-column: 1 / -1; text-align: center; font-size: 0.78rem; font-weight: 650; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); }
+.err { border: 1px solid var(--line); border-radius: 0.75rem; padding: 1rem 1.15rem; }
+.err .k { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--bad); }
+.err h4 { font-size: 1.1rem; font-weight: 700; margin: 0.3rem 0 0.35rem; padding: 0; }
+.err p { font-size: 0.95rem !important; line-height: 1.55 !important; margin: 0 !important; }
+.err .ex { margin-top: 0.6rem !important; font-size: 0.85rem !important; color: var(--ink) !important; background: var(--panel); border-radius: 0.5rem; padding: 0.45rem 0.65rem; }
+
+.deck .lead span { display: block; }
+.uses3 { display: flex; flex-direction: column; gap: 0.45rem; margin-top: 0.5rem; }
+.uses3 div { background: var(--panel); border-radius: 0.5rem; padding: 0.4rem 0.6rem; }
+.uses3 b { display: block; font-size: 0.9rem; font-weight: 680; }
+.uses3 small { font-size: 0.8rem; color: var(--muted); line-height: 1.4; }
+.risk3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; margin-top: 2.5rem; text-align: left; }
+.risk3 .risk-h { grid-column: 1 / -1; }
+.err .guard { margin-top: 0.6rem !important; font-size: 0.85rem !important; color: var(--good) !important; font-weight: 600; }
+.ctx-callout { margin-top: 2.25rem; }
 </style>
 """
 
@@ -1833,7 +2019,7 @@ NAV = [(s["id"], s["title"]) for s in SECTIONS] + [
 nav = "".join(f'<a href="#{i}">{t}</a>' for i, t in NAV)
 
 sections = "".join(
-    section_html(i, s["id"], s["title"], f"<p>{s['body']}</p>")
+    section_html(i, s["id"], s["title"], s["body"])
     for i, s in enumerate(SECTIONS, start=1)
 )
 sections += section_html(len(SECTIONS) + 1, "approach", "Our Approach", approach_inner)
