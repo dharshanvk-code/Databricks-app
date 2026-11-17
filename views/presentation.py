@@ -2103,7 +2103,6 @@ st.html(
     + "</div>"
     + "<h1>Address Resolution</h1>"
     + '<p class="deck-authors">Dharshan Vetrivelan, JJ Lee, Adam Soliman</p>'
-    + f"<p>{PLACEHOLDER}</p>"
     + f'<nav class="deck-nav">{nav}</nav>'
     + "</header>"
     + sections
