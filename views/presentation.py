@@ -1706,18 +1706,6 @@ ISSUES = [
         "We read the files in multi-line mode with RFC 4180 quote escaping.",
     ),
     (
-        "Cleaning",
-        "State codes in the wrong country",
-        (
-            "Some rows filed US states under other countries, like Maryland/MD under "
-            "TR, so region checks disagreed about the same place."
-        ),
-        (
-            "We scoped region aliases to each country, with a fallback for full name "
-            "vs. code."
-        ),
-    ),
-    (
         "Translation",
         "One prompt for every field confused the model",
         (
@@ -1725,30 +1713,6 @@ ISSUES = [
             "of Kurilsk) became “Building 1 Kurilsk”."
         ),
         "We wrote a prompt for each field and country group, with worked examples.",
-    ),
-    (
-        "Translation",
-        "English written in Hindi or Thai script",
-        (
-            "The model translated the meaning or swapped in famous places: “West "
-            "Vanessaport” came back as “West Vancouver”."
-        ),
-        (
-            "We added a prompt for English-speaking countries that asked for the "
-            "original spelling."
-        ),
-    ),
-    (
-        "Translation",
-        "Qwen returned empty answers",
-        (
-            "Whenever we set a token limit, Qwen returned nothing. It was also about "
-            "82× slower than Gemma."
-        ),
-        (
-            "We removed the token cap, set temperature to 0, and used Qwen only as a "
-            "fallback."
-        ),
     ),
     (
         "Matching",
