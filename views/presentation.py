@@ -1212,12 +1212,6 @@ ROW_OUTCOMES = [
         14_009,
         "",
     ),
-    (
-        "Held: same company, two addresses",
-        "dlq_same_company_conflict",
-        234,
-        "is-held",
-    ),
     ("Held: city or street is blank", "dlq_incomplete", 404, "is-held"),
 ]
 
@@ -1237,7 +1231,7 @@ def rows_html() -> str:
         )
     return (
         '<div class="rows">'
-        '<div class="rows-title">Where all 35,185 source rows ended up</div>'
+        '<div class="rows-title">Where the 35,185 source rows ended up</div>'
         + "".join(rows)
         + "</div>"
     )
@@ -1952,8 +1946,8 @@ MATCHING_CONCEPTS = [
         "Dead letter queue",
         "A holding table for rows that can't move forward yet, each with a reason.",
         (
-            "We held rows that needed translation, had blank or invalid fields, "
-            "failed translation checks, or had two addresses for one company."
+            "We held rows that needed translation, had blank or invalid fields, or "
+            "failed translation checks."
         ),
     ),
     (
