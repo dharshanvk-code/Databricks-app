@@ -40,11 +40,19 @@ Things that break it:
 - The app reaches the agent through its `genie-space` app resource (Can run), which `app.yaml` maps to `GENIE_SPACE_ID`. The agent queries `addressresolution.gold.addresses_deduplicated`, so the app's service principal needs `SELECT` on it.
 - Answers take 10-60 seconds. Don't block on them: the question is submitted without waiting, and a fragment with `run_every` checks once every 2 seconds while one is pending. Blocking would freeze the page.
 - Show Genie errors as a short message with a reference ID and log the details. Don't show raw API errors to users.
+- The chat input is pinned to the bottom and covers content behind it. Leave space below the last element (see `.st-key-genie_starters`). Check it on a short window.
 - Genie's text is Markdown. Render it with `st.markdown`, never with `unsafe_allow_html`. Only our own static markup (brand pill, progress steps) uses HTML.
+
+## Entity Explorer
+
+- Text from the tables is feed data. Run it through `escape_markdown`/`cell` before any Markdown sink (`st.markdown`, `st.table`, badges, `st.info`). Never use `unsafe_allow_html` with it.
+- The full-row highlight is a pandas Styler applied on the rerun after a click. Cell clicks don't select rows in `single-row` mode, so this is the only way. Every rerun resends the table, so only `DISPLAY_LIMIT` rows are sent. Search and filters still cover all of Gold.
+- After a click, the page scrolls to the bottom. The script retries a few times because deployed loads are slower.
+- Loading skeletons are static HTML in `st.empty()` placeholders. They only show on uncached loads (the cache lasts 1 h).
 
 ## Layout
 
-- All page text is center-aligned, and paragraphs span up to `60rem`. The exceptions are charts, where alignment carries meaning: the row-accounting bars, the evidence bars in the scored pairs, and the scroll diagram's step text.
+- All page text is center-aligned (Presentation and Entity Explorer), and paragraphs span up to `60rem`. The exceptions are charts, where alignment carries meaning: the row-accounting bars, the evidence bars in the scored pairs, and the scroll diagram's step text.
 - Streamlit's own CSS pads lists and other elements. Reset them with `!important` where needed.
 
 ## Checks
@@ -53,9 +61,16 @@ Things that break it:
 - JS: `node --check views/assets/vector_search.js`, plus the tag-like-text grep above.
 - Run the app with `.venv/bin/streamlit run app.py`, then open `/presentation`. Check it at desktop and phone widths (about 390 px). Scroll through every step of the diagram, and confirm there's no horizontal overflow and no new console errors. Two `_stcore` 404s when you load `/presentation` directly are expected.
 
-## Rules
+## Deploying
 
+- The app `entityres` deploys from GitHub `main`: `databricks apps deploy entityres --json '{"git_source":{"branch":"main"}}'`. Merge first, then deploy.
+- In prod, queries run as the app's service principal, not as you. Something that works locally can fail in prod with `INSUFFICIENT_PERMISSIONS`. Any new table needs `USE SCHEMA` and `SELECT` granted to that principal. Silver belongs to a teammate, so ask the user to run grants.
+- Users see only a reference ID. Find it with `databricks apps logs entityres` and look for `ref=`. macOS has no `timeout` command, so don't wrap the logs call in one.
 - Keep `databricks-sdk` pinned in `requirements.txt`. The Apps runtime otherwise keeps an older preinstalled SDK that lacks newer Genie enums (for example `MessageStatus.PENDING_WAREHOUSE`).
+- Light theme is forced in `.streamlit/config.toml` (`base = "light"`).
+- A running app costs credits. Remind the user to stop it (`databricks apps stop entityres`) when they're done.
+
+## Rules
 
 - Don't change workspace paths or Unity Catalog table names in code.
 - Don't sync, start, or edit teammates' pipelines in the workspace.

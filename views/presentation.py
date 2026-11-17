@@ -4,7 +4,6 @@ from pathlib import Path
 
 import streamlit as st
 
-PLACEHOLDER = "[description]"
 ASSETS = Path(__file__).parent / "assets"
 
 # Figures below come from the live workspace (addressresolution catalog):
@@ -360,12 +359,7 @@ STYLE = """
 .rows-title {
     font-size: 1rem;
     font-weight: 680;
-    margin-bottom: 0.2rem;
-}
-.rows-sub {
-    font-size: 0.88rem;
-    color: var(--muted);
-    margin-bottom: 1rem;
+    margin-bottom: 1.2rem;
 }
 .rows-row {
     display: grid;
@@ -515,9 +509,18 @@ STYLE = """
 /* Stat strip. */
 .stats {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr));
     gap: 0.75rem;
     margin-top: 1.25rem;
+}
+.stats.is-narrow {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 22rem;
+    margin-left: auto;
+    margin-right: auto;
+}
+.stats-bridge {
+    margin-top: 1rem !important;
 }
 .stat {
     background: var(--panel);
@@ -543,6 +546,22 @@ STYLE = """
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0.75rem;
     margin-top: 1.5rem;
+}
+.stages.has-lead {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-width: 40rem;
+    margin-left: auto;
+    margin-right: auto;
+}
+.stage.is-lead {
+    grid-column: 1 / -1;
+    justify-self: center;
+    width: calc((100% - 0.75rem) / 2);
+    background: #FBF3DC;
+    border-color: #E6C870;
+}
+.stage.is-lead .stage-kind {
+    color: #85620B;
 }
 .stage {
     border: 1px solid var(--line);
@@ -883,6 +902,9 @@ STYLE = """
     padding-top: 0.5rem;
     margin-top: auto !important;
 }
+.deck-card h4 + .used {
+    margin-top: 0 !important;
+}
 .deck-card .used b {
     color: var(--accent);
     font-weight: 650;
@@ -951,8 +973,13 @@ STYLE = """
     .stats,
     .issues,
     .deck-grid,
-    .stages {
+    .stages,
+    .stages.has-lead {
         grid-template-columns: minmax(0, 1fr);
+    }
+    .stage.is-lead {
+        width: auto;
+        justify-self: stretch;
     }
     .rows-row {
         grid-template-columns: minmax(0, 1fr);
@@ -1077,6 +1104,27 @@ STYLE = """
 .risk3 .risk-h { grid-column: 1 / -1; }
 .err .guard { margin-top: 0.6rem !important; font-size: 0.85rem !important; color: var(--good) !important; font-weight: 600; }
 .ctx-callout { margin-top: 2.25rem; }
+
+/* Problem and Why It Matters on narrow screens. Kept last so it wins. */
+@media (max-width: 820px) {
+    .chain {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .chain .arrow {
+        justify-self: center;
+        transform: rotate(90deg);
+    }
+}
+@media (max-width: 640px) {
+    .causes,
+    .risk3 {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .rec {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.2rem;
+    }
+}
 </style>
 """
 
@@ -1112,7 +1160,7 @@ FLOW = [
         "We loaded two synthetic CSV feeds into raw tables with Auto Loader.",
     ),
     (
-        "Silver",
+        "Silver 1.0: Cleaning / Normalization",
         "Clean and translate",
         "33,716",
         "rows ready to match",
@@ -1122,7 +1170,7 @@ FLOW = [
         ),
     ),
     (
-        "Matching",
+        "Silver 2.0: Matching / Scoring",
         "Find and score duplicates",
         "1.02M",
         "candidate pairs scored",
@@ -1137,8 +1185,8 @@ FLOW = [
         "20,538",
         "resolved addresses",
         (
-            "We kept one complete address per company and location, linked to "
-            "every source record behind it."
+            "Business-ready data: every unique address, with an ID to link it to "
+            "its source records."
         ),
     ),
 ]
@@ -1160,7 +1208,7 @@ ROW_OUTCOMES = [
     ("Published to Gold", "the one record kept per entity", 20_538, ""),
     (
         "Merged into a Gold record",
-        "duplicates, incl. 1,065 incomplete rows we completed from a match",
+        "duplicates",
         14_009,
         "",
     ),
@@ -1190,8 +1238,6 @@ def rows_html() -> str:
     return (
         '<div class="rows">'
         '<div class="rows-title">Where all 35,185 source rows ended up</div>'
-        '<div class="rows-sub">From <code>silver.address_pipeline_accounting</code>. '
-        "We made the run fail if these didn't add up to the source total.</div>"
         + "".join(rows)
         + "</div>"
     )
@@ -1238,11 +1284,10 @@ TIERS = [
     (
         "is-rule",
         "Deterministic",
-        "1 · Lookup table",
+        "1 · Lookup Delta Table",
         (
             "We translated known Chinese, Korean, and Japanese cities and provinces "
             "with a lookup table. It cost nothing and gave the same answer every time. "
-            "We never replaced only part of a street address."
         ),
     ),
     (
@@ -1258,7 +1303,7 @@ TIERS = [
     (
         "is-rule",
         "Deterministic",
-        "3 · Checks and glossary",
+        "3 · Data Quality Checks",
         (
             "We rejected answers with leftover non-Latin text, changed numbers, lost "
             "suite or building labels, or extra words. A glossary fixed recurring "
@@ -1271,7 +1316,7 @@ TIERS = [
         "4 · Qwen 3.5 122B",
         (
             "Only answers that failed the checks got a second try with the larger "
-            "model. In our test it fixed 78 of 90 failures, but it was about 82× slower."
+            "model. In our test it fixed 78 of 90 failures, but it was about 82× slower and much more expensive."
         ),
     ),
 ]
@@ -1290,13 +1335,14 @@ TRANSLATION_STATS = [
     ("8,071", "rows needed translation"),
     ("11,929", "distinct AI requests after removing repeats"),
     ("7,740", "rows accepted after translation"),
-    ("7", "rows a reviewer corrected by hand"),
+    ("7", "rows corrected by hand"),
 ]
 
 
-def stats_html(items: list[tuple[str, str]]) -> str:
+def stats_html(items: list[tuple[str, str]], *, narrow: bool = False) -> str:
+    cls = "stats is-narrow" if narrow else "stats"
     return (
-        '<div class="stats">'
+        f'<div class="{cls}" style="--n:{len(items)}">'
         + "".join(
             f'<div class="stat"><div class="stat-value">{v}</div>'
             f'<div class="stat-label">{label}</div></div>'
@@ -1311,18 +1357,18 @@ translation_step = step_html(
     "Translation",
     "<p>About one in five addresses had non-Latin text: Chinese, Japanese, Korean, "
     "Russian, Thai, Hindi, Arabic. To compare records, we needed everything in one "
-    "script. We went from the cheapest, most predictable method to the most "
+    "writing system. We went from the cheapest, most predictable method to the most "
     "expensive:</p>"
     + tiers_html
     + stats_html(TRANSLATION_STATS)
     + "<p>We accepted a translated row only if it also passed every cleaning rule. "
-    "Rows that translated fine but still missed a field (331) moved on to "
+    "Rows that translated fine but still had null fields (331) moved on to "
     "<code>dlq_incomplete</code>. We cached responses in a Delta table keyed by "
-    "the exact text, model, and prompt, so a re-run never paid for the same answer "
-    "twice.</p>",
+    "the exact text, model, and prompt, so rerunning the pipeline never recomputed "
+    "the same answer.</p>",
 )
 
-STAGES = [
+CANDIDATE_STAGES = [
     (
         "Deterministic",
         "Exact rule",
@@ -1332,7 +1378,7 @@ STAGES = [
         ),
     ),
     (
-        "Candidates",
+        "Matching",
         "Blocking",
         (
             "Five passes grouped records that shared a key, such as country + city + "
@@ -1341,13 +1387,16 @@ STAGES = [
         ),
     ),
     (
-        "Candidates",
+        "Matching",
         "Embeddings + HNSW",
         (
             "Vector search caught what keys missed: typos, reordered words, other "
             "scripts. <strong>979,677 more pairs.</strong>"
         ),
     ),
+]
+
+SCORING_STAGES = [
     (
         "Scoring",
         "String similarity",
@@ -1374,45 +1423,48 @@ STAGES = [
     ),
 ]
 
-stages_html = (
-    '<div class="stages">'
-    + "".join(
-        f'<div class="stage"><div class="stage-kind">{kind}</div>'
+
+def stages_html(stages: list[tuple[str, str, str]], *, lead: bool = False) -> str:
+    """Render stage cards. With lead, the first card sits alone on top, in gold."""
+    cards = "".join(
+        f'<div class="stage{" is-lead" if lead and i == 0 else ""}">'
+        f'<div class="stage-kind">{kind}</div>'
         f"<h4>{title}</h4><p>{body}</p></div>"
-        for kind, title, body in STAGES
+        for i, (kind, title, body) in enumerate(stages)
     )
-    + "</div>"
-)
+    layout = " has-lead" if lead else ""
+    return f'<div class="stages{layout}">{cards}</div>'
+
 
 MATCH_STATS = [
     ("568.4M", "possible pairs among 33,716 records"),
     ("1.02M", "pairs actually scored (0.18%)"),
-    ("12,988", "pairs scored as matches (exact + model)"),
-    ("14,009", "duplicate rows merged into Gold records"),
 ]
+
+SCORED_MATCHES_STAT = [("12,988", "pairs scored as matches (exact + model)")]
+MERGED_ROWS_STAT = [("14,009", "duplicate rows merged into Gold records")]
 
 VS_STEPS = [
     (
         "Records",
         "We started with plain text",
         (
-            "Each record was a company name plus an address. Spelling, casing, and "
-            "abbreviations differed between feeds, so exact keys missed many "
-            "duplicates."
+            "We used company + address to turn records into something a computer can understand: "
+            "vectors (a list of numbers). But how?"
         ),
     ),
     (
         "Embeddings",
-        "We turned each record into a point",
+        "Vector Space (384-dim)",
         (
             "A multilingual model turned each record into 384 numbers. Records that "
             "meant the same thing landed close together, even when spelled "
-            "differently. We measured closeness with <strong>cosine similarity</strong>."
+            "differently. We measured distance with <strong>cosine similarity</strong>."
         ),
     ),
     (
         "Brute force",
-        "Comparing everything was too slow",
+        "Problem: Pairwise comparison",
         (
             "Finding a record's neighbors by brute force meant measuring the distance "
             "to every other record. For 33,716 records, that's about "
@@ -1421,21 +1473,21 @@ VS_STEPS = [
     ),
     (
         "HNSW",
-        "We built a layered graph",
+        "We built a layered graph using HNSW",
         (
-            "HNSW linked every record to its near neighbors on the bottom layer. Each "
+            "HNSW (Hierarchical Navigable Small World) linked every record to its near neighbors on the bottom layer. Each "
             "layer up kept fewer records with longer links, like highways above "
             "local streets."
         ),
     ),
     (
         "Search",
-        "The search went from the top layer down",
+        "Search goes top-down",
         (
             "The search started at the top and hopped to whichever linked record was "
             "closer to the target. When no hop helped, it dropped down a layer. A few "
-            "hops replaced thousands of comparisons. On sampled queries, it found over "
-            "99% of the neighbors an exact search found."
+            "hops replaced thousands of comparisons. On a few sample queries, it found "
+            "99% of the neighbors a full pairwise search found."
         ),
     ),
     (
@@ -1444,7 +1496,7 @@ VS_STEPS = [
         (
             "We kept up to 20 new neighbors per record with cosine ≥ 0.70, skipping "
             "pairs that blocking already found. That added "
-            "<strong>979,677 candidate pairs</strong>."
+            "<strong>979,677 candidate pairs</strong> that blocking couldn't find."
         ),
     ),
     (
@@ -1453,8 +1505,7 @@ VS_STEPS = [
         (
             "Every candidate still went through Jaro–Winkler, Fellegi–Sunter, and the "
             "safeguards. A close neighbor could be a different suite, or a different "
-            "company in the same building. Of the 979,677 vector-search pairs, "
-            "<strong>26 became matches</strong>."
+            "company in the same building. This allowed us to find hundreds of new dupes."
         ),
     ),
 ]
@@ -1543,20 +1594,21 @@ PAIR_SPLIT = (
 )
 
 matching_step = step_html(
-    "Step 4 · Matching",
-    "Matching and scoring",
+    "Step 4 · Matching & Scoring",
+    "Matching: Generating Candidate Pairs for Deduping",
     "<p>We defined a duplicate as <strong>the same company at the same "
-    "location</strong>. Two companies can share a building, and one company can "
+    "location, basically a (company, address) pair.</strong> Two companies can share a building, and one company can "
     "have many offices, so we never merged records on a shared address alone.</p>"
-    "<p>Comparing every record with every other would have meant 568 million "
-    "pairs. Instead, we built a short list of likely pairs, scored only those, and "
-    "let hard rules overrule the score.</p>"
-    + stages_html
+    "<p>Comparing every pair of records (O(n^2)) would have meant 568 million "
+    "pairs, which isn't scalable. Instead, we used canonical methods of entity resolution "
+    "to generate candidate pairs:</p>"
+    + stages_html(CANDIDATE_STAGES, lead=True)
     + stats_html(MATCH_STATS)
     + "<h4>How vector search found candidates</h4>"
     + vector_search_html
-    + "<h4>How we scored one pair</h4>"
-    "<p>Fellegi–Sunter adds up evidence. Each field that agrees adds points, and a "
+    + "<h4>Scoring</h4>"
+    + stages_html(SCORING_STAGES)
+    + "<p>Fellegi–Sunter adds up evidence. Each field that agrees adds points, and a "
     "common value adds fewer. The total becomes a probability. These are two real "
     "pairs from our scoring run (the data is synthetic):</p>"
     '<div class="pairs">' + PAIR_MERGED + PAIR_SPLIT + "</div>"
@@ -1564,7 +1616,14 @@ matching_step = step_html(
     "had probability ≥ 0.99, Jaro–Winkler ≥ 0.85 on company, street, and city, and "
     "no safeguard conflict. Everything else was held for review or kept separate. "
     "We also never merged A with C just because A≈B and B≈C: every pair inside a "
-    "group needed its own evidence.</p></div>",
+    "group needed its own evidence.</p></div>"
+    + stats_html(SCORED_MATCHES_STAT, narrow=True)
+    + '<p class="stats-bridge">We revisited the 1,469 rows held in '
+    "<code>silver.dlq_incomplete</code> because of null cities or streets. We "
+    "filled in the blanks from Gold records with the identical company, country, "
+    "and remaining address part, which found <strong>1,065 more "
+    "duplicates</strong>. The other 404 stayed held.</p>"
+    + stats_html(MERGED_ROWS_STAT, narrow=True),
     step_id="matching",
 )
 
@@ -1578,6 +1637,10 @@ gold_step = step_html(
     "<li><strong>Which record won:</strong> the version the most sources agreed "
     "on, then one with a supplied (not inferred) country, then a stable ID as the "
     "tie-break.</li>"
+    "<li><strong>Limitation:</strong> this was plain voting, so it treated every "
+    "source as equally reliable. Truth discovery methods (Li&nbsp;et&nbsp;al., "
+    "“A Survey on Truth Discovery,” 2015) instead "
+    "estimate how reliable each source is and weight its votes by that.</li>"
     "<li><strong>Filling gaps:</strong> we completed 1,065 rows missing only a city "
     "or a street from a Gold record, but only when exactly one entity had the "
     "same company, country, and remaining address part.</li>"
@@ -1611,18 +1674,6 @@ DLQS = [
         "0",
         "A reviewer corrected the last 7 by hand, and the pipeline applied the fixes.",
     ),
-    (
-        "<code>dlq_same_company_conflict</code>",
-        "Same company name at addresses the matcher wouldn't merge",
-        "234",
-        "Held out of Gold until someone picks the true address.",
-    ),
-    (
-        "<code>needs_match_review</code> flag",
-        "A pair scored above 0.80 but a safeguard blocked it",
-        "465",
-        "Kept in Gold, flagged with the neighbor to compare against.",
-    ),
 ]
 
 dlq_table = (
@@ -1641,7 +1692,7 @@ dlq_step = step_html(
     "Throughout",
     "Dead letter queues",
     "<p>A <strong>dead letter queue</strong> (DLQ) is a table for rows that can't "
-    "safely move forward. Instead of failing the whole pipeline or dropping data, "
+    "safely move forward. Instead of failing or stalling the whole pipeline, or dropping data, "
     "we wrote each of those rows to a Delta table with a reason, such as "
     "<code>city:null_or_blank</code> or <code>street_address:numbers_changed</code>.</p>"
     + dlq_table
@@ -1735,12 +1786,55 @@ issues_step = step_html(
     "<p>These problems changed how we built the pipeline:</p>" + issues_html,
 )
 
+EVAL_ROWS = [
+    ("Precision", "99.2%", "100%"),
+    ("Recall", "84.6%", "91.1%"),
+]
+
+eval_table = (
+    '<div class="table-wrap"><table class="deck-table"><thead><tr>'
+    "<th>Measure</th><th>First run</th><th>After our fixes</th>"
+    "</tr></thead><tbody>"
+    + "".join(
+        f"<tr><td>{name}</td><td class='num'>{first}</td><td class='num'>{after}</td></tr>"
+        for name, first, after in EVAL_ROWS
+    )
+    + "</tbody></table></div>"
+)
+
+ADDRESS_COUNT_STATS = [
+    ("20,000", "unique addresses (the correct answer)"),
+    ("20,538", "addresses in our Gold table"),
+]
+
+evaluation_step = step_html(
+    "Results",
+    "Evaluation",
+    "<p>We ran an experiment using a frontier model, GPT 6.1 Sol, to evaluate 300 candidate pairs "
+    "(weighted toward likely matches and close calls) and decide whether they were "
+    "dupes or not. It acted as a validation set for us to evaluate our pipeline.</p>"
+    "<p><strong>Precision</strong> is the share of our merges the model agreed "
+    "with. <strong>Recall</strong> is the share of the model's matches that we "
+    "also merged. We judged our pipeline against GPT 6.1 Sol:</p>"
+    + eval_table
+    + "<p>The first run showed that our pipeline was conservative and generally "
+    "accurate: almost every merge was right, but it missed 15.4% of the "
+    "duplicates. We studied the pairs where we and the model disagreed, fixed the "
+    "rules behind those misses, and ran it again. Compared to GPT 6.1 Sol, we "
+    "reached <strong>100% precision and 91.1% recall</strong>.</p>"
+    + stats_html(ADDRESS_COUNT_STATS)
+    + "<p>Our Gold table had 538 more addresses than the correct answer, which "
+    "fits a pipeline that leans toward keeping records apart.</p>"
+    '<p class="deck-note">The model is a second opinion, not ground truth. To '
+    "improve this, we would label the sample pairs ourselves.</p>",
+)
+
 approach_inner = (
-    "<p>We built a <strong>medallion pipeline</strong> on Databricks. We ingested "
-    "the raw feeds, cleaned and translated them, compared every record with its "
-    "likely duplicates, and kept <strong>one complete address per company</strong> "
-    "in the Gold table. Each step ran as a Lakeflow pipeline or job, and every "
-    "table lived in Unity Catalog.</p>"
+    "<p>We started with a <strong>medallion architecture</strong> built on Databricks. We ingested "
+    "the raw feeds, cleaned and translated them, generated possible duplicate pairs "
+    "and scored them, and kept <strong>all unique addresses</strong> "
+    "in the Gold table. All processing ran as either a <strong>Lakeflow</strong> pipeline or job, "
+    "and data was stored in tables in <strong>Unity Catalog</strong>.</p>"
     + flow_html
     + rows_html()
     + bronze_step
@@ -1750,6 +1844,7 @@ approach_inner = (
     + gold_step
     + dlq_step
     + issues_step
+    + evaluation_step
 )
 
 # ---------------------------------------------------------------------------
@@ -1760,78 +1855,54 @@ DATABRICKS_TOOLS = [
     (
         "Lakeflow Jobs",
         (
-            "Runs a set of tasks in order. If one fails, “repair run” reruns only that "
-            "task and the ones after it."
-        ),
-        (
-            "One job ran Silver, then blocking → embeddings → HNSW → strings → "
-            "scoring → resolution → publish."
+            "One job ran Silver, then blocking → embeddings → HNSW → strings → scoring "
+            "→ resolution → publish."
         ),
     ),
     (
         "Lakeflow Declarative Pipelines",
         (
-            "You write each table as a function. Databricks works out the order, "
-            "builds the tables, and checks data-quality rules called expectations."
-        ),
-        (
-            "We built Bronze, Silver (cleaning and translation), and output "
-            "publication as pipelines. Expectations failed the run if row counts "
-            "didn't add up."
+            "We built Bronze, Silver (cleaning and translation), and output publication"
+            " as pipelines. Expectations failed the run if row counts didn't add up."
         ),
     ),
     (
         "Auto Loader",
         (
-            "Picks up new files from storage and remembers which ones it has already "
-            "read."
-        ),
-        (
-            "We loaded both CSV feeds into Bronze exactly once, each with an "
-            "explicit all-string schema."
+            "We loaded both CSV feeds into Bronze exactly once, each with an explicit "
+            "all-string schema."
         ),
     ),
     (
         "Unity Catalog",
         (
-            "One place to name, secure, and find data, as "
-            "<code>catalog.schema.table</code>."
-        ),
-        (
-            "We kept everything in <code>addressresolution</code>, with bronze, "
-            "silver, matching, and gold schemas, plus a volume for model files."
+            "We kept everything in <code>addressresolution</code>, with bronze, silver,"
+            " matching, and gold schemas, plus a volume for model files."
         ),
     ),
     (
         "Delta tables",
         (
-            "Data files plus a transaction log. Writes are all-or-nothing, and older "
-            "versions stay readable."
-        ),
-        (
-            "We stored every layer, every DLQ, the translation cache, and run "
-            "outputs keyed by run ID as Delta tables."
+            "We stored every layer, every DLQ, the translation cache, and run outputs "
+            "keyed by run ID as Delta tables."
         ),
     ),
     (
         "AI Functions: <code>ai_query</code>",
-        "Calls an LLM from SQL or PySpark, one row at a time, inside the pipeline.",
         (
-            "We translated company, street, city, and state. A bad response became "
-            "an error value, not a failed run."
+            "We translated company, street, city, and state. A bad response became an "
+            "error value, not a failed run."
         ),
     ),
     (
         "AI Gateway models: Gemma and Qwen",
-        "Databricks-hosted LLM endpoints behind one governed interface.",
         (
-            "We used Gemma 3 12B for speed and Qwen 3.5 122B as a fallback for "
-            "answers that failed our checks."
+            "We used Gemma 3 12B for speed and Qwen 3.5 122B as a fallback for answers "
+            "that failed our checks."
         ),
     ),
     (
         "MLflow",
-        "Records each run's settings, metrics, and output files.",
         (
             "We stored the HNSW index files, the fitted Splink model, and a code hash "
             "for each run."
@@ -1839,12 +1910,14 @@ DATABRICKS_TOOLS = [
     ),
     (
         "Serverless compute",
-        "Databricks manages the machines. You run code without setting up clusters.",
-        "We ran all pipelines and jobs on serverless, in standard mode for batch runs.",
+        (
+            "We ran all pipelines and jobs on serverless, in standard mode for batch "
+            "runs. We also used it to run SQL queries, view tables, and support this "
+            "app."
+        ),
     ),
     (
         "Asset Bundles",
-        "Jobs and pipelines defined as YAML files and deployed with one CLI command.",
         (
             "We deployed the matching and deduplication jobs from "
             "<code>databricks.yml</code>."
@@ -1852,15 +1925,13 @@ DATABRICKS_TOOLS = [
     ),
     (
         "Databricks Apps",
-        "Hosts a web app next to your data, with workspace sign-in.",
         (
-            "We deployed this Streamlit app on it. The app reads the Gold views "
-            "through a SQL warehouse."
+            "We deployed this Streamlit app on it. The app reads the Gold views through"
+            " a SQL warehouse."
         ),
     ),
     (
         "Databricks SQL warehouses",
-        "Serverless compute for running SQL against Unity Catalog tables.",
         (
             "We ran row-count checks, the Gemma vs. Qwen translation test, and the "
             "queries behind this app."
@@ -1881,8 +1952,8 @@ MATCHING_CONCEPTS = [
         "Dead letter queue",
         "A holding table for rows that can't move forward yet, each with a reason.",
         (
-            "We used four queues and a review flag for translation, gaps, review, and "
-            "conflicts."
+            "We held rows that needed translation, had blank or invalid fields, "
+            "failed translation checks, or had two addresses for one company."
         ),
     ),
     (
@@ -1987,7 +2058,7 @@ def cards_html(items: list[tuple[str, str, str]]) -> str:
     return (
         '<div class="deck-grid">'
         + "".join(
-            f'<div class="deck-card"><h4>{name}</h4><p>{body}</p>'
+            f'<div class="deck-card"><h4>{name}</h4>{f"<p>{body}</p>" if body else ""}'
             f'<p class="used"><b>How we used it:</b> {used}</p></div>'
             for name, body, used in items
         )
@@ -1999,7 +2070,7 @@ concepts_inner = (
     "<p>Plain-language definitions of the tools and ideas behind the pipeline, "
     "and how we used each one.</p>"
     '<div class="deck-sub"><h3>Databricks tools</h3>'
-    + cards_html(DATABRICKS_TOOLS)
+    + cards_html([(name, "", used) for name, used in DATABRICKS_TOOLS])
     + "</div>"
     '<div class="deck-sub"><h3>Matching and data concepts</h3>'
     + cards_html(MATCHING_CONCEPTS)
@@ -2014,7 +2085,6 @@ NAV = [(s["id"], s["title"]) for s in SECTIONS] + [
     ("approach", "Our Approach"),
     ("concepts", "Concepts and Tools We Used"),
     ("demo", "Demo"),
-    ("next-steps", "Next Steps"),
 ]
 nav = "".join(f'<a href="#{i}">{t}</a>' for i, t in NAV)
 
@@ -2028,56 +2098,6 @@ sections += section_html(
 )
 
 sections += '<section class="deck-section deck-demo" id="demo"><h2>Demo</h2></section>'
-
-NEXT_STEPS = [
-    (
-        "Measure accuracy with labeled pairs",
-        (
-            "We had no reviewed match labels, so we couldn't measure precision or "
-            "recall. We'd label a sample of pairs early, including close calls like "
-            "neighbors in the same building, and track both numbers on every run."
-        ),
-    ),
-    (
-        "Check the match probabilities",
-        (
-            "Fellegi–Sunter started from an assumed match rate, so a probability of "
-            "0.99 isn't proven to mean 99%. With labels, we'd check how often each "
-            "score is actually right."
-        ),
-    ),
-    (
-        "Build a review screen for held records",
-        (
-            "234 rows with two addresses for one company, 404 incomplete rows, and "
-            "465 flagged Gold rows still need a person. We'd give reviewers a screen "
-            "to pick the right answer and feed it back into the pipeline."
-        ),
-    ),
-    (
-        "Make new providers easier to add",
-        (
-            "Bronze reads each feed with a fixed, hand-written schema. We'd turn on "
-            "schema evolution and keep unexpected columns, so a new provider or a new "
-            "column doesn't need a code change."
-        ),
-    ),
-]
-
-next_steps_inner = (
-    "<p>Things we'd change or add with more time:</p>"
-    '<ul class="deck-list">'
-    + "".join(
-        f"<li><strong>{title}:</strong> {body}</li>" for title, body in NEXT_STEPS
-    )
-    + "</ul>"
-)
-sections += section_html(
-    len(SECTIONS) + 3,
-    "next-steps",
-    "What We'd Do Differently / Next Steps",
-    next_steps_inner,
-)
 
 script = (ASSETS / "vector_search.js").read_text(encoding="utf-8")
 
