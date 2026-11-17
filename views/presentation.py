@@ -17,8 +17,8 @@ PROBLEM_HTML = """
   <div class="records-title">One company, four records</div>
   <div class="rec"><span class="src">PROVIDER A</span><span>Okada Foods Co., Ltd. · 458 Okada Street, Suite 4 · Osaka, Japan</span></div>
   <div class="rec"><span class="src">PROVIDER B</span><span>OKADA FOODS · 458 Okada St, Ste 4 · Osaka, JP</span></div>
-  <div class="rec"><span class="src">PROVIDER B</span><span>岡田食品株式会社 · 岡田通 458 · 大阪市, JP</span></div>
-  <div class="rec"><span class="src">PROVIDER A</span><span>Okada Foods · <span class="gap">street missing</span> · Osaka, Japan</span></div>
+  <div class="rec"><span class="src">PROVIDER C</span><span>岡田食品株式会社 · 岡田通 458 · 大阪市, JP</span></div>
+  <div class="rec"><span class="src">PROVIDER D</span><span>Okada Foods · <span class="gap">street missing</span> · Osaka, Japan</span></div>
   <div class="records-q">Same place? <span>A person can tell. A machine, across millions of rows, can't.</span></div>
 </div>
 <div class="causes">
@@ -53,7 +53,7 @@ WHY_HTML = """
   <div class="arrow">→</div>
   <div class="link"><div class="k">Internal</div><h4>Supply chain graph</h4><p>Who makes what, where it comes from, how it moves</p></div>
   <div class="arrow">→</div>
-  <div class="link"><div class="k">Customer-facing</div><h4>Decisions</h4>
+  <div class="link"><div class="k">Customer-facing</div><h4>Applications</h4>
     <div class="uses3">
       <div><b>Supply chain risk</b><small>Which suppliers sit behind my products</small></div>
       <div><b>Scenario modeling</b><small>What breaks if a port closes or a disaster hits</small></div>
